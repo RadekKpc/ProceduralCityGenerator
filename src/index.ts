@@ -1,3 +1,6 @@
+import { CanvasDrawingEngine } from "./drawingEngine/CanvasDrawingEngine";
+import { CityGenerator } from "./generator/CityGenerator";
+import SimulationConfiguration from "./simulationConfiguration";
 
 const init = () => {
     const canvas = <HTMLCanvasElement>document.getElementById("canvas");
@@ -5,13 +8,26 @@ const init = () => {
 
     if (!ctx) return;
 
-    // Start a new Path
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(300, 222);
+    const canvansDrawingEngine = new CanvasDrawingEngine(ctx);
+    const cityGenerator = new CityGenerator(SimulationConfiguration);
 
-    // Draw the Path
-    ctx.stroke();
+    const nextTick = () => {
+        const { value: streetGraph, done } = cityGenerator.next();
+        if (done) {
+            alert('Generation done!');
+            return;
+        }
+        canvansDrawingEngine.drawStreets(streetGraph);
+
+    }
+
+    const nextTickButton = document.getElementById("nextTickButton");
+    if (nextTickButton) {
+        nextTickButton.onclick = nextTick;
+    }
+
+    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
 }
+
 
 init();
