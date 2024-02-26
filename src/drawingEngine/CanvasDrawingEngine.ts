@@ -14,6 +14,7 @@ export class CanvasDrawingEngine implements IDrawingEngine {
     }
 
     drawStreets(streetGraph: StreetGraph): void {
+        this.context.clearRect(0, 0, 1920, 1080);
 
         for (let edge of streetGraph.edges) {
             this.context.lineWidth = edge.width;

@@ -26,6 +26,14 @@ const init = () => {
         nextTickButton.onclick = nextTick;
     }
 
+    const interval = setInterval(nextTick, 0);
+
+    const stopButton = document.getElementById("stop");
+
+    if (stopButton) {
+        stopButton.onclick = () => clearInterval(interval);
+    }
+
     canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
 }
 
