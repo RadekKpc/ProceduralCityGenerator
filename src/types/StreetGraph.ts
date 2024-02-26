@@ -18,7 +18,7 @@ export class Point {
     }
 
     distance(a: Point) {
-        return Math.sqrt((this.x * a.x) + (this.y * a.y));
+        return Math.sqrt(Math.pow(this.x - a.x, 2) + Math.pow(this.y - a.y, 2));
     }
 
     normalize() {
@@ -45,6 +45,12 @@ export class Point {
 
     turnRight(): Point {
         return new Point(this.y, this.x * (-1));
+    }
+
+    rotate(angleInRadian: number): Point {
+        const x2 = Math.cos(angleInRadian) * this.x - Math.sin(angleInRadian) * this.y;
+        const y2 = Math.sin(angleInRadian) * this.x + Math.cos(angleInRadian) * this.y;
+        return new Point(x2, y2);
     }
 }
 
@@ -85,6 +91,10 @@ export class StreetNode {
         this.direction.normalize();
         this.leftDirection = this.direction.turnLeft();
         this.rightDirection = this.direction.turnRight();
+    }
+
+    setPosition(newPosition: Point) {
+        this.position = newPosition;
     }
 
 }
@@ -142,6 +152,19 @@ export class StreetGraph {
         this.graph[startNodeId][endNodeId] = street;
         this.graph[endNodeId][startNodeId] = street;
         this.edges.push(street);
+    }
+
+    removeStreet(street: StreetEdge) {
+        const startNodeId = street.startNode.id;
+        const endNodeId = street.endNode.id;
+
+        delete this.graph[startNodeId][endNodeId];
+        delete this.graph[endNodeId][startNodeId];
+
+        const index = this.edges.indexOf(street);
+        if (index > -1) {
+            this.edges.splice(index, 1);
+        }
     }
 
     getNodeValence(node: StreetNode) {
