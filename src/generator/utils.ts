@@ -1,12 +1,14 @@
 import { Point } from "../types/StreetGraph";
 
 // Standard Normal variate using Box-Muller transform.
-export const gaussianRandom = (mean = 0, stdev = 1) => {
+export const gaussianRandom = (stdev = 1, mean = 0, min = -5, max = 5): number => {
     const u = 1 - Math.random(); // Converting [0,1) to (0,1]
     const v = Math.random();
     const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     // Transform to the desired mean and standard deviation:
-    return z * stdev + mean;
+    const result = z * stdev + mean;
+    if (result < min || result > max) return gaussianRandom(mean, stdev, min, max);
+    return result;
 }
 
 export const calculateIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {

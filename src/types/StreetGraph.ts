@@ -121,11 +121,19 @@ export class StreetGraph {
     edges: StreetEdge[];
     nodes: StreetNode[];
     graph: { [nodeId: number]: { [nodeId: number]: StreetEdge } };
+    newPoints: Point[];
+    valence2edges: number;
+    valence3edges: number;
+    valence4edges: number;
 
     constructor() {
         this.edges = [];
         this.nodes = [];
-        this.graph = {}
+        this.newPoints = [];
+        this.graph = {};
+        this.valence2edges = 0;
+        this.valence3edges = 0;
+        this.valence4edges = 0;
     }
 
     addStreet(street: StreetEdge) {
@@ -170,5 +178,33 @@ export class StreetGraph {
     getNodeValence(node: StreetNode) {
         if (!this.graph[node.id]) throw new Error('Node do not belongs to street graph');
         return Object.values(this.graph[node.id]).length;
+    }
+
+    addNewPoint(point: Point) {
+        this.newPoints.push(point);
+    }
+
+    clearNewPoints() {
+        this.newPoints = [];
+    }
+
+    getValenceDistribution() {
+        const valenceDistributon: { [key: string]: number } = {
+            '1': 0,
+            '2': 0,
+            '3': 0,
+            '4': 0
+        };
+        for (const node of this.nodes) {
+            const valence = this.getNodeValence(node);
+
+            if (!valenceDistributon[valence]) {
+                valenceDistributon[valence] = 0;
+            }
+
+            valenceDistributon[valence] += 1;
+        }
+
+        return valenceDistributon;
     }
 }

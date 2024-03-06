@@ -5,7 +5,7 @@ export interface ISimulationConfiguration {
     cityCenterPoint: Point,
     numberOfYears: number,
     timeStep: number,
-    valenceRatio: [number, number, number, number], // should sum to 1, node with valence 1, 2, 3, 4 respectivelly
+    valenceRatio: [number, number, number], // should sum to 1, node with valence 2, 3, 4 respectivelly
     streetsLength: number,
     generationAngle: number,
 }
@@ -22,7 +22,7 @@ const SimulationConfiguration: ISimulationConfiguration = {
     cityCenterPoint: new Point(400, 400),
     numberOfYears: 10000000,
     timeStep: 1,
-    valenceRatio: [0.1, 0.6, 0.1, 0.3],
+    valenceRatio: [0.6, 0.3, 0.1],
     streetsLength: 30,
     generationAngle: Math.PI/3
 }

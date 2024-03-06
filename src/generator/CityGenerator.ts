@@ -50,12 +50,11 @@ export class CityGenerator implements Iterator<StreetGraph> {
             if (edge.startNode.id != startNode.id && edge.endNode.id != startNode.id) {
                 const intersectionPoint = calculateIntersection(edge.startNode.position, edge.endNode.position, newStreet.startNode.position, newStreet.endNode.position);
                 if (intersectionPoint) {
-                    if (closestInetrsectionPoint && closestInetrsectionPoint.distance(edge.startNode.position) <= intersectionPoint.distance(edge.startNode.position)) {
+                    if (closestInetrsectionPoint && closestInetrsectionPoint.distance(newStreet.startNode.position) <= intersectionPoint.distance(newStreet.startNode.position)) {
                         continue;
                     }
                     intersectionStreet = edge;
                     closestInetrsectionPoint = intersectionPoint;
-                    console.log(intersectionPoint, edge.startNode.position, edge.endNode.position, newStreet.startNode.position, newStreet.endNode.position);
                 }
 
             }
@@ -110,7 +109,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
             return this.generateNewStreet(node.leftDirection, null, node);
         }
 
-        console.log("nothing gerated");
+        console.log("nothing generated");
 
         return {
             newStreets: [],
@@ -118,29 +117,42 @@ export class CityGenerator implements Iterator<StreetGraph> {
         };
     }
 
+    getSearchedValence() {
+        const valenceDistributon = this.streetGraph.getValenceDistribution();
+        const allNodes = this.streetGraph.nodes.length;
+
+        // check distribution again (for 4 valance nodes)
+        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v/allNodes))
+        if (valenceDistributon['2'] / allNodes < this.configuration.valenceRatio[0]) return 1;
+        if (valenceDistributon['3'] / allNodes < this.configuration.valenceRatio[1]) return 2;
+        return 3;
+    }
+
     next(): IteratorResult<StreetGraph, any> {
         this.currentTime += 1;
 
-        const growthCandidates = this.streetGraph.nodes.filter(node => node.isGrowthing);
+        const searchedValence = this.getSearchedValence();
+        const growthCandidates = this.streetGraph.nodes.filter(node => node.isGrowthing && this.streetGraph.getNodeValence(node) == searchedValence);
         const candidatesProbabilites = growthCandidates.map(candidate => this.calucateGrowthCandidateProbablity(candidate));
         const normalizedCandidatesProbabilities = this.normalizeNumbers(candidatesProbabilites);
 
         const randomNodeIndex = this.randomlySelectElementFromProbabilityDistribution(normalizedCandidatesProbabilities);
         const randomNode = growthCandidates[randomNodeIndex];
 
-        console.log(this.streetGraph.edges);
 
         const expansionResult = this.expandNode(randomNode);
 
 
+        this.streetGraph.clearNewPoints()
         for (let newStreet of expansionResult.newStreets) {
-            this.streetGraph.addStreet(newStreet!); // check it twice
+            this.streetGraph.addStreet(newStreet); // check it twice
+            this.streetGraph.addNewPoint(newStreet.endNode.position);
+            this.streetGraph.addNewPoint(newStreet.startNode.position);
         }
 
         for (let streetToRemove of expansionResult.streetsToRemove) {
-            this.streetGraph.removeStreet(streetToRemove!); // check it twice
+            this.streetGraph.removeStreet(streetToRemove); // check it twice
         }
-
 
         return {
             done: this.currentTime == this.configuration.numberOfYears,

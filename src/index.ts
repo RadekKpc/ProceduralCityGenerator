@@ -18,7 +18,6 @@ const init = () => {
             return;
         }
         canvansDrawingEngine.drawStreets(streetGraph);
-
     }
 
     const nextTickButton = document.getElementById("nextTickButton");
