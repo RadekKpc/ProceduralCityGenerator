@@ -10,12 +10,17 @@ class CanvasDrawingEngine {
     }
     drawStreets(streetGraph) {
         this.context.clearRect(0, 0, 1920, 1080);
+        this.context.fillStyle = "black";
         for (let edge of streetGraph.edges) {
             this.context.lineWidth = edge.width;
             this.context.beginPath();
             this.context.moveTo(edge.startNode.position.x + this.offsetX, edge.startNode.position.y * (-1) + this.offsetY);
             this.context.lineTo(edge.endNode.position.x + this.offsetX, edge.endNode.position.y * (-1) + this.offsetY);
             this.context.stroke();
+        }
+        this.context.fillStyle = "red";
+        for (let newPoint of streetGraph.newPoints) {
+            this.context.fillRect(newPoint.x + this.offsetX, newPoint.y * (-1) + this.offsetY, 5, 5);
         }
     }
 }
@@ -61,12 +66,11 @@ class CityGenerator {
             if (edge.startNode.id != startNode.id && edge.endNode.id != startNode.id) {
                 const intersectionPoint = (0, utils_1.calculateIntersection)(edge.startNode.position, edge.endNode.position, newStreet.startNode.position, newStreet.endNode.position);
                 if (intersectionPoint) {
-                    if (closestInetrsectionPoint && closestInetrsectionPoint.distance(edge.startNode.position) <= intersectionPoint.distance(edge.startNode.position)) {
+                    if (closestInetrsectionPoint && closestInetrsectionPoint.distance(newStreet.startNode.position) <= intersectionPoint.distance(newStreet.startNode.position)) {
                         continue;
                     }
                     intersectionStreet = edge;
                     closestInetrsectionPoint = intersectionPoint;
-                    console.log(intersectionPoint, edge.startNode.position, edge.endNode.position, newStreet.startNode.position, newStreet.endNode.position);
                 }
             }
         }
@@ -112,23 +116,37 @@ class CityGenerator {
             node.hasLeft = true;
             return this.generateNewStreet(node.leftDirection, null, node);
         }
-        console.log("nothing gerated");
+        console.log("nothing generated");
         return {
             newStreets: [],
             streetsToRemove: []
         };
     }
+    getSearchedValence() {
+        const valenceDistributon = this.streetGraph.getValenceDistribution();
+        const allNodes = this.streetGraph.nodes.length;
+        // check distribution again (for 4 valance nodes)
+        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v/allNodes))
+        if (valenceDistributon['2'] / allNodes < this.configuration.valenceRatio[0])
+            return 1;
+        if (valenceDistributon['3'] / allNodes < this.configuration.valenceRatio[1])
+            return 2;
+        return 3;
+    }
     next() {
         this.currentTime += 1;
-        const growthCandidates = this.streetGraph.nodes.filter(node => node.isGrowthing);
+        const searchedValence = this.getSearchedValence();
+        const growthCandidates = this.streetGraph.nodes.filter(node => node.isGrowthing && this.streetGraph.getNodeValence(node) == searchedValence);
         const candidatesProbabilites = growthCandidates.map(candidate => this.calucateGrowthCandidateProbablity(candidate));
         const normalizedCandidatesProbabilities = this.normalizeNumbers(candidatesProbabilites);
         const randomNodeIndex = this.randomlySelectElementFromProbabilityDistribution(normalizedCandidatesProbabilities);
         const randomNode = growthCandidates[randomNodeIndex];
-        console.log(this.streetGraph.edges);
         const expansionResult = this.expandNode(randomNode);
+        this.streetGraph.clearNewPoints();
         for (let newStreet of expansionResult.newStreets) {
             this.streetGraph.addStreet(newStreet); // check it twice
+            this.streetGraph.addNewPoint(newStreet.endNode.position);
+            this.streetGraph.addNewPoint(newStreet.startNode.position);
         }
         for (let streetToRemove of expansionResult.streetsToRemove) {
             this.streetGraph.removeStreet(streetToRemove); // check it twice
@@ -145,28 +163,32 @@ exports.CityGenerator = CityGenerator;
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NormalStreetsPattern = void 0;
+const utils_1 = require("../utils");
 class NormalStreetsPattern {
     getNewNodeLocation(direction, startNode, configuration) {
-        const newLength = Math.random() * configuration.streetsLength + configuration.streetsLength;
-        const newAngle = (Math.random() - 0.5) * configuration.generationAngle;
+        const newLength = (0, utils_1.gaussianRandom)(0.16, 0.5, 0, 1) * configuration.streetsLength + configuration.streetsLength;
+        const newAngle = (0, utils_1.gaussianRandom)(0.16, 0, -0.5, 0.5) * configuration.generationAngle;
         const newNodePosition = startNode.position.vectorAdd(direction.rotate(newAngle).scalarMultiply(newLength));
         return newNodePosition;
     }
 }
 exports.NormalStreetsPattern = NormalStreetsPattern;
 
-},{}],4:[function(require,module,exports){
+},{"../utils":4}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.calculateIntersection = exports.gaussianRandom = void 0;
 const StreetGraph_1 = require("../types/StreetGraph");
 // Standard Normal variate using Box-Muller transform.
-const gaussianRandom = (mean = 0, stdev = 1) => {
+const gaussianRandom = (stdev = 1, mean = 0, min = -5, max = 5) => {
     const u = 1 - Math.random(); // Converting [0,1) to (0,1]
     const v = Math.random();
     const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     // Transform to the desired mean and standard deviation:
-    return z * stdev + mean;
+    const result = z * stdev + mean;
+    if (result < min || result > max)
+        return (0, exports.gaussianRandom)(mean, stdev, min, max);
+    return result;
 };
 exports.gaussianRandom = gaussianRandom;
 const calculateIntersection = (p1, p2, p3, p4) => {
@@ -245,7 +267,7 @@ const SimulationConfiguration = {
     cityCenterPoint: new StreetGraph_1.Point(400, 400),
     numberOfYears: 10000000,
     timeStep: 1,
-    valenceRatio: [0.1, 0.6, 0.1, 0.3],
+    valenceRatio: [0.6, 0.3, 0.1],
     streetsLength: 30,
     generationAngle: Math.PI / 3
 };
@@ -342,7 +364,11 @@ class StreetGraph {
     constructor() {
         this.edges = [];
         this.nodes = [];
+        this.newPoints = [];
         this.graph = {};
+        this.valence2edges = 0;
+        this.valence3edges = 0;
+        this.valence4edges = 0;
     }
     addStreet(street) {
         const startNodeId = street.startNode.id;
@@ -377,6 +403,28 @@ class StreetGraph {
         if (!this.graph[node.id])
             throw new Error('Node do not belongs to street graph');
         return Object.values(this.graph[node.id]).length;
+    }
+    addNewPoint(point) {
+        this.newPoints.push(point);
+    }
+    clearNewPoints() {
+        this.newPoints = [];
+    }
+    getValenceDistribution() {
+        const valenceDistributon = {
+            '1': 0,
+            '2': 0,
+            '3': 0,
+            '4': 0
+        };
+        for (const node of this.nodes) {
+            const valence = this.getNodeValence(node);
+            if (!valenceDistributon[valence]) {
+                valenceDistributon[valence] = 0;
+            }
+            valenceDistributon[valence] += 1;
+        }
+        return valenceDistributon;
     }
 }
 exports.StreetGraph = StreetGraph;
