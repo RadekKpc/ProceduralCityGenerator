@@ -36,19 +36,27 @@ export class CityGenerator implements Iterator<StreetGraph> {
         return distribution.findIndex(e => e >= randomNumber);
     }
 
+    scanAround(scanPosition: Point) {
+        for (let node of this.streetGraph.nodes) {
+            if (node.position.distance(scanPosition) < this.configuration.nodeCricusScanningR) {
+                return node;
+            }
+        }
+        return null;
+    }
+
     generateNewStreet(direction: Point, strategy: null, startNode: StreetNode) {
-        const newNodePosition = new NormalStreetsPattern().getNewNodeLocation(direction, startNode, this.configuration);
+        const [newNodePosition, futureIntersectionScanPosition] = new NormalStreetsPattern().getNewNodeLocation(direction, startNode, this.configuration);
         const newNode = new StreetNode(this.streetGraph.nodes.length, newNodePosition, Hierarchy.Major);
         const newStreet = new StreetEdge(startNode, newNode, Hierarchy.Major, 1, StreetStatus.Build);
 
-        // check for intersection
+        // check for intersection or future intersection
         let closestInetrsectionPoint: Point | null = null;
         let intersectionStreet: StreetEdge | null = null;
 
         for (let edge of this.streetGraph.edges) {
-
             if (edge.startNode.id != startNode.id && edge.endNode.id != startNode.id) {
-                const intersectionPoint = calculateIntersection(edge.startNode.position, edge.endNode.position, newStreet.startNode.position, newStreet.endNode.position);
+                const intersectionPoint = calculateIntersection(edge.startNode.position, edge.endNode.position, newStreet.startNode.position, futureIntersectionScanPosition);
                 if (intersectionPoint) {
                     if (closestInetrsectionPoint && closestInetrsectionPoint.distance(newStreet.startNode.position) <= intersectionPoint.distance(newStreet.startNode.position)) {
                         continue;
@@ -60,18 +68,39 @@ export class CityGenerator implements Iterator<StreetGraph> {
             }
         }
 
-        // cut graph
         if (closestInetrsectionPoint && intersectionStreet) {
+            // if intersection is close ot existing point we do not need cut edge
+            const nodeInCircle = this.scanAround(closestInetrsectionPoint);
+            if (nodeInCircle) {
+                newStreet.endNode = nodeInCircle;
+                return {
+                    newStreets: [newStreet],
+                    streetsToRemove: []
+                }
+            }
+
+            // cut graph
             newNode.setPosition(closestInetrsectionPoint);
             // they should inherit all proeprties
             const part1Street = new StreetEdge(intersectionStreet.startNode, newNode, intersectionStreet.hierarchy, 3, intersectionStreet.status);
             const part2Street = new StreetEdge(intersectionStreet.endNode, newNode, intersectionStreet.hierarchy, 3, intersectionStreet.status);
-            const newStreet = new StreetEdge(startNode, newNode, Hierarchy.Major, 3, StreetStatus.Build);
+            const newStreet2 = new StreetEdge(startNode, newNode, Hierarchy.Major, 3, StreetStatus.Build);
             return {
-                newStreets: [part1Street, part2Street, newStreet],
+                newStreets: [part1Street, part2Street, newStreet2],
                 streetsToRemove: [intersectionStreet]
             };
 
+        }
+
+
+        // check for existing nodes in circle
+        const nodeInCircle = this.scanAround(newNode.position);
+        if (nodeInCircle) {
+            newStreet.endNode = nodeInCircle;
+            return {
+                newStreets: [newStreet],
+                streetsToRemove: []
+            }
         }
 
         return {
@@ -122,7 +151,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
         const allNodes = this.streetGraph.nodes.length;
 
         // check distribution again (for 4 valance nodes)
-        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v/allNodes))
+        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v / allNodes));
         if (valenceDistributon['2'] / allNodes < this.configuration.valenceRatio[0]) return 1;
         if (valenceDistributon['3'] / allNodes < this.configuration.valenceRatio[1]) return 2;
         return 3;

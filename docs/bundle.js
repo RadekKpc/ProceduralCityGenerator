@@ -7,6 +7,10 @@ class CanvasDrawingEngine {
         this.context = context;
         this.offsetX = 1920 / 2;
         this.offsetY = 1080 / 2;
+        this.SCALE = 1;
+    }
+    setScale(scale) {
+        this.SCALE = scale;
     }
     drawStreets(streetGraph) {
         this.context.clearRect(0, 0, 1920, 1080);
@@ -14,13 +18,13 @@ class CanvasDrawingEngine {
         for (let edge of streetGraph.edges) {
             this.context.lineWidth = edge.width;
             this.context.beginPath();
-            this.context.moveTo(edge.startNode.position.x + this.offsetX, edge.startNode.position.y * (-1) + this.offsetY);
-            this.context.lineTo(edge.endNode.position.x + this.offsetX, edge.endNode.position.y * (-1) + this.offsetY);
+            this.context.moveTo((edge.startNode.position.x * this.SCALE) + this.offsetX, (edge.startNode.position.y * (-1) * this.SCALE + this.offsetY));
+            this.context.lineTo((edge.endNode.position.x * this.SCALE) + this.offsetX, (edge.endNode.position.y * (-1) * this.SCALE + this.offsetY));
             this.context.stroke();
         }
         this.context.fillStyle = "red";
         for (let newPoint of streetGraph.newPoints) {
-            this.context.fillRect(newPoint.x + this.offsetX, newPoint.y * (-1) + this.offsetY, 5, 5);
+            this.context.fillRect(newPoint.x * this.SCALE + this.offsetX, newPoint.y * (-1) * this.SCALE + this.offsetY, 5, 5);
         }
     }
 }
@@ -55,16 +59,24 @@ class CityGenerator {
         const randomNumber = Math.random();
         return distribution.findIndex(e => e >= randomNumber);
     }
+    scanAround(scanPosition) {
+        for (let node of this.streetGraph.nodes) {
+            if (node.position.distance(scanPosition) < this.configuration.nodeCricusScanningR) {
+                return node;
+            }
+        }
+        return null;
+    }
     generateNewStreet(direction, strategy, startNode) {
-        const newNodePosition = new NormalStreetsPattern_1.NormalStreetsPattern().getNewNodeLocation(direction, startNode, this.configuration);
+        const [newNodePosition, futureIntersectionScanPosition] = new NormalStreetsPattern_1.NormalStreetsPattern().getNewNodeLocation(direction, startNode, this.configuration);
         const newNode = new StreetGraph_1.StreetNode(this.streetGraph.nodes.length, newNodePosition, StreetGraph_1.Hierarchy.Major);
         const newStreet = new StreetGraph_1.StreetEdge(startNode, newNode, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
-        // check for intersection
+        // check for intersection or future intersection
         let closestInetrsectionPoint = null;
         let intersectionStreet = null;
         for (let edge of this.streetGraph.edges) {
             if (edge.startNode.id != startNode.id && edge.endNode.id != startNode.id) {
-                const intersectionPoint = (0, utils_1.calculateIntersection)(edge.startNode.position, edge.endNode.position, newStreet.startNode.position, newStreet.endNode.position);
+                const intersectionPoint = (0, utils_1.calculateIntersection)(edge.startNode.position, edge.endNode.position, newStreet.startNode.position, futureIntersectionScanPosition);
                 if (intersectionPoint) {
                     if (closestInetrsectionPoint && closestInetrsectionPoint.distance(newStreet.startNode.position) <= intersectionPoint.distance(newStreet.startNode.position)) {
                         continue;
@@ -74,16 +86,34 @@ class CityGenerator {
                 }
             }
         }
-        // cut graph
         if (closestInetrsectionPoint && intersectionStreet) {
+            // if intersection is close ot existing point we do not need cut edge
+            const nodeInCircle = this.scanAround(closestInetrsectionPoint);
+            if (nodeInCircle) {
+                newStreet.endNode = nodeInCircle;
+                return {
+                    newStreets: [newStreet],
+                    streetsToRemove: []
+                };
+            }
+            // cut graph
             newNode.setPosition(closestInetrsectionPoint);
             // they should inherit all proeprties
             const part1Street = new StreetGraph_1.StreetEdge(intersectionStreet.startNode, newNode, intersectionStreet.hierarchy, 3, intersectionStreet.status);
             const part2Street = new StreetGraph_1.StreetEdge(intersectionStreet.endNode, newNode, intersectionStreet.hierarchy, 3, intersectionStreet.status);
-            const newStreet = new StreetGraph_1.StreetEdge(startNode, newNode, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
+            const newStreet2 = new StreetGraph_1.StreetEdge(startNode, newNode, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
             return {
-                newStreets: [part1Street, part2Street, newStreet],
+                newStreets: [part1Street, part2Street, newStreet2],
                 streetsToRemove: [intersectionStreet]
+            };
+        }
+        // check for existing nodes in circle
+        const nodeInCircle = this.scanAround(newNode.position);
+        if (nodeInCircle) {
+            newStreet.endNode = nodeInCircle;
+            return {
+                newStreets: [newStreet],
+                streetsToRemove: []
             };
         }
         return {
@@ -126,7 +156,7 @@ class CityGenerator {
         const valenceDistributon = this.streetGraph.getValenceDistribution();
         const allNodes = this.streetGraph.nodes.length;
         // check distribution again (for 4 valance nodes)
-        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v/allNodes))
+        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v / allNodes));
         if (valenceDistributon['2'] / allNodes < this.configuration.valenceRatio[0])
             return 1;
         if (valenceDistributon['3'] / allNodes < this.configuration.valenceRatio[1])
@@ -169,7 +199,8 @@ class NormalStreetsPattern {
         const newLength = (0, utils_1.gaussianRandom)(0.16, 0.5, 0, 1) * configuration.streetsLength + configuration.streetsLength;
         const newAngle = (0, utils_1.gaussianRandom)(0.16, 0, -0.5, 0.5) * configuration.generationAngle;
         const newNodePosition = startNode.position.vectorAdd(direction.rotate(newAngle).scalarMultiply(newLength));
-        return newNodePosition;
+        const scanFuturePosition = startNode.position.vectorAdd(direction.rotate(newAngle).scalarMultiply(newLength * configuration.futureIntersectionScanFactor));
+        return [newNodePosition, scanFuturePosition];
     }
 }
 exports.NormalStreetsPattern = NormalStreetsPattern;
@@ -228,12 +259,15 @@ const simulationConfiguration_1 = __importDefault(require("./simulationConfigura
 const init = () => {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
+    let SCALE = 1;
+    let currentStreetGraph = null;
     if (!ctx)
         return;
     const canvansDrawingEngine = new CanvasDrawingEngine_1.CanvasDrawingEngine(ctx);
     const cityGenerator = new CityGenerator_1.CityGenerator(simulationConfiguration_1.default);
     const nextTick = () => {
         const { value: streetGraph, done } = cityGenerator.next();
+        currentStreetGraph = streetGraph;
         if (done) {
             alert('Generation done!');
             return;
@@ -249,6 +283,18 @@ const init = () => {
     if (stopButton) {
         stopButton.onclick = () => clearInterval(interval);
     }
+    const zoomIn = document.getElementById('zoomIn');
+    const zoomOut = document.getElementById('zoomOut');
+    zoomIn === null || zoomIn === void 0 ? void 0 : zoomIn.addEventListener("click", () => {
+        SCALE *= 1.5;
+        canvansDrawingEngine.setScale(SCALE);
+        canvansDrawingEngine.drawStreets(currentStreetGraph);
+    });
+    zoomOut === null || zoomOut === void 0 ? void 0 : zoomOut.addEventListener("click", () => {
+        SCALE /= 1.5;
+        canvansDrawingEngine.setScale(SCALE);
+        canvansDrawingEngine.drawStreets(currentStreetGraph);
+    });
     canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
 };
 init();
@@ -263,13 +309,19 @@ const StreetNode2 = new StreetGraph_1.StreetNode(1, new StreetGraph_1.Point(50, 
 const street1 = new StreetGraph_1.StreetEdge(StreetNode1, StreetNode2, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
 initialStreetGraph.addStreet(street1);
 const SimulationConfiguration = {
+    // initial parameters
     initialStreetGraph: initialStreetGraph,
     cityCenterPoint: new StreetGraph_1.Point(400, 400),
+    // simulation
     numberOfYears: 10000000,
     timeStep: 1,
-    valenceRatio: [0.6, 0.3, 0.1],
-    streetsLength: 30,
-    generationAngle: Math.PI / 3
+    // new nodes generation
+    generationAngle: Math.PI / 2.5,
+    streetsLength: 20,
+    futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
+    nodeCricusScanningR: 7,
+    // streets
+    valenceRatio: [0.8, 0.1, 0.1],
 };
 exports.default = SimulationConfiguration;
 

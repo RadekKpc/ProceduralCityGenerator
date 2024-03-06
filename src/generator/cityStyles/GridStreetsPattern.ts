@@ -4,10 +4,11 @@ import { IStreetsPattern } from "./IStreetsPattern";
 
 export class GridStreetsPattern implements IStreetsPattern {
 
-    getNewNodeLocation(direction: Point, startNode: StreetNode, configuration: ISimulationConfiguration): Point {
+    getNewNodeLocation(direction: Point, startNode: StreetNode, configuration: ISimulationConfiguration): [Point, Point] {
         const newLength = Math.random() * configuration.streetsLength + configuration.streetsLength;
         const newNodePosition = startNode.position.vectorAdd(direction.scalarMultiply(newLength));
-        return newNodePosition;
+        const scanFuturePosition = startNode.position.vectorAdd(direction.scalarMultiply(newLength * configuration.futureIntersectionScanFactor));
+        return [newNodePosition, scanFuturePosition];
     }
 
 }

@@ -8,6 +8,8 @@ export interface ISimulationConfiguration {
     valenceRatio: [number, number, number], // should sum to 1, node with valence 2, 3, 4 respectivelly
     streetsLength: number,
     generationAngle: number,
+    futureIntersectionScanFactor: number,
+    nodeCricusScanningR: number,
 }
 
 const initialStreetGraph = new StreetGraph();
@@ -18,13 +20,20 @@ const street1 = new StreetEdge(StreetNode1, StreetNode2, Hierarchy.Major, 1, Str
 initialStreetGraph.addStreet(street1);
 
 const SimulationConfiguration: ISimulationConfiguration = {
+    // initial parameters
     initialStreetGraph: initialStreetGraph,
     cityCenterPoint: new Point(400, 400),
+
+    // simulation
     numberOfYears: 10000000,
     timeStep: 1,
-    valenceRatio: [0.6, 0.3, 0.1],
-    streetsLength: 30,
-    generationAngle: Math.PI/3
+    // new nodes generation
+    generationAngle: Math.PI / 2.5,
+    streetsLength: 20,
+    futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
+    nodeCricusScanningR: 7,
+    // streets
+    valenceRatio: [0.8, 0.1, 0.1],
 }
 
 export default SimulationConfiguration; 
