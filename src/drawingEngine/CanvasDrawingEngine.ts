@@ -6,17 +6,41 @@ export class CanvasDrawingEngine implements IDrawingEngine {
     context: CanvasRenderingContext2D;
     offsetX: number;
     offsetY: number;
-    SCALE: number;
+    scale: number;
+    userOffsetX: number;
+    userOffsetY: number;
+    tmpUserOffsetX: number;
+    tmpUserOffsetY: number;
 
     constructor(context: CanvasRenderingContext2D) {
         this.context = context;
         this.offsetX = 1920 / 2;
         this.offsetY = 1080 / 2;
-        this.SCALE = 1;
+        this.scale = 1;
+        this.userOffsetX = 0;
+        this.userOffsetY = 0;
+        this.tmpUserOffsetX = 0;
+        this.tmpUserOffsetY = 0;
     }
 
     setScale(scale: number) {
-        this.SCALE = scale;
+        this.scale = scale;
+    }
+
+    addUserOffsetX(offset: number) {
+        this.userOffsetX += offset;
+    }
+
+    addUserOffsetY(offset: number) {
+        this.userOffsetY += offset;
+    }
+
+    setTmpUserOffsetX(offset: number) {
+        this.tmpUserOffsetX = offset;
+    }
+
+    setTmpUserOffsetY(offset: number) {
+        this.tmpUserOffsetY = offset;
     }
 
     drawStreets(streetGraph: StreetGraph): void {
@@ -27,15 +51,15 @@ export class CanvasDrawingEngine implements IDrawingEngine {
         for (let edge of streetGraph.edges) {
             this.context.lineWidth = edge.width;
             this.context.beginPath();
-            this.context.moveTo((edge.startNode.position.x * this.SCALE) + this.offsetX, (edge.startNode.position.y * (-1) * this.SCALE + this.offsetY));
-            this.context.lineTo((edge.endNode.position.x * this.SCALE) + this.offsetX, (edge.endNode.position.y * (-1) * this.SCALE + this.offsetY));
+            this.context.moveTo((edge.startNode.position.x * this.scale) + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, (edge.startNode.position.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY));
+            this.context.lineTo((edge.endNode.position.x * this.scale) + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, (edge.endNode.position.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY));
             this.context.stroke();
         }
 
         this.context.fillStyle = "red";
 
         for (let newPoint of streetGraph.newPoints) {
-            this.context.fillRect(newPoint.x * this.SCALE + this.offsetX, newPoint.y * (-1) * this.SCALE + this.offsetY, 5, 5);
+            this.context.fillRect(newPoint.x * this.scale + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, newPoint.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY, 5, 5);
         }
     }
 }

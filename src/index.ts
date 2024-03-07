@@ -6,6 +6,10 @@ const init = () => {
     const canvas = <HTMLCanvasElement>document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     let SCALE = 1;
+    let drag = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+
     let currentStreetGraph = null;
 
     if (!ctx) return;
@@ -36,20 +40,68 @@ const init = () => {
         stopButton.onclick = () => clearInterval(interval);
     }
 
+    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+
+    // UI FUNCTIONS
+    // ZOOMING
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
-    zoomIn?.addEventListener("click", () => {
+
+    const zoomInCallback = () => {
         SCALE *= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.drawStreets(currentStreetGraph!);
-    });
-    zoomOut?.addEventListener("click", () => {
+    }
+
+    const zoomOutCallback = () => {
         SCALE /= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.drawStreets(currentStreetGraph!);
+    }
+
+    zoomIn?.addEventListener("click", zoomInCallback);
+    zoomOut?.addEventListener("click", zoomOutCallback);
+
+
+    canvas.addEventListener('wheel', (e) => {
+        if (e.deltaY > 0) {
+            zoomInCallback();
+        } else {
+            zoomOutCallback();
+        }
     });
 
-    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+    // MOVING CANVAS POSITION AROUND
+
+    canvas.addEventListener('mousedown', (e) => {
+        dragStartX = e.pageX;
+        dragStartY = e.pageY;
+        drag = true;
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        const diffX = e.pageX - dragStartX;
+        const diffY = e.pageY - dragStartY;
+        canvansDrawingEngine.addUserOffsetX(diffX);
+        canvansDrawingEngine.addUserOffsetY(diffY);
+
+        canvansDrawingEngine.setTmpUserOffsetX(0);
+        canvansDrawingEngine.setTmpUserOffsetY(0);
+
+        canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+        drag = false
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (drag) {
+            const diffX = e.pageX - dragStartX;
+            const diffY = e.pageY - dragStartY;
+            canvansDrawingEngine.setTmpUserOffsetX(diffX);
+            canvansDrawingEngine.setTmpUserOffsetY(diffY);
+            canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+        }
+    });
+
 }
 
 
