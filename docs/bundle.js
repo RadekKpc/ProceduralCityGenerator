@@ -7,10 +7,26 @@ class CanvasDrawingEngine {
         this.context = context;
         this.offsetX = 1920 / 2;
         this.offsetY = 1080 / 2;
-        this.SCALE = 1;
+        this.scale = 1;
+        this.userOffsetX = 0;
+        this.userOffsetY = 0;
+        this.tmpUserOffsetX = 0;
+        this.tmpUserOffsetY = 0;
     }
     setScale(scale) {
-        this.SCALE = scale;
+        this.scale = scale;
+    }
+    addUserOffsetX(offset) {
+        this.userOffsetX += offset;
+    }
+    addUserOffsetY(offset) {
+        this.userOffsetY += offset;
+    }
+    setTmpUserOffsetX(offset) {
+        this.tmpUserOffsetX = offset;
+    }
+    setTmpUserOffsetY(offset) {
+        this.tmpUserOffsetY = offset;
     }
     drawStreets(streetGraph) {
         this.context.clearRect(0, 0, 1920, 1080);
@@ -18,13 +34,13 @@ class CanvasDrawingEngine {
         for (let edge of streetGraph.edges) {
             this.context.lineWidth = edge.width;
             this.context.beginPath();
-            this.context.moveTo((edge.startNode.position.x * this.SCALE) + this.offsetX, (edge.startNode.position.y * (-1) * this.SCALE + this.offsetY));
-            this.context.lineTo((edge.endNode.position.x * this.SCALE) + this.offsetX, (edge.endNode.position.y * (-1) * this.SCALE + this.offsetY));
+            this.context.moveTo((edge.startNode.position.x * this.scale) + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, (edge.startNode.position.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY));
+            this.context.lineTo((edge.endNode.position.x * this.scale) + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, (edge.endNode.position.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY));
             this.context.stroke();
         }
         this.context.fillStyle = "red";
         for (let newPoint of streetGraph.newPoints) {
-            this.context.fillRect(newPoint.x * this.SCALE + this.offsetX, newPoint.y * (-1) * this.SCALE + this.offsetY, 5, 5);
+            this.context.fillRect(newPoint.x * this.scale + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, newPoint.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY, 5, 5);
         }
     }
 }
@@ -260,6 +276,9 @@ const init = () => {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     let SCALE = 1;
+    let drag = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
     let currentStreetGraph = null;
     if (!ctx)
         return;
@@ -283,19 +302,56 @@ const init = () => {
     if (stopButton) {
         stopButton.onclick = () => clearInterval(interval);
     }
+    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+    // UI FUNCTIONS
+    // ZOOMING
     const zoomIn = document.getElementById('zoomIn');
     const zoomOut = document.getElementById('zoomOut');
-    zoomIn === null || zoomIn === void 0 ? void 0 : zoomIn.addEventListener("click", () => {
+    const zoomInCallback = () => {
         SCALE *= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.drawStreets(currentStreetGraph);
-    });
-    zoomOut === null || zoomOut === void 0 ? void 0 : zoomOut.addEventListener("click", () => {
+    };
+    const zoomOutCallback = () => {
         SCALE /= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.drawStreets(currentStreetGraph);
+    };
+    zoomIn === null || zoomIn === void 0 ? void 0 : zoomIn.addEventListener("click", zoomInCallback);
+    zoomOut === null || zoomOut === void 0 ? void 0 : zoomOut.addEventListener("click", zoomOutCallback);
+    canvas.addEventListener('wheel', (e) => {
+        if (e.deltaY > 0) {
+            zoomInCallback();
+        }
+        else {
+            zoomOutCallback();
+        }
     });
-    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+    // MOVING CANVAS POSITION AROUND
+    canvas.addEventListener('mousedown', (e) => {
+        dragStartX = e.pageX;
+        dragStartY = e.pageY;
+        drag = true;
+    });
+    canvas.addEventListener('mouseup', (e) => {
+        const diffX = e.pageX - dragStartX;
+        const diffY = e.pageY - dragStartY;
+        canvansDrawingEngine.addUserOffsetX(diffX);
+        canvansDrawingEngine.addUserOffsetY(diffY);
+        canvansDrawingEngine.setTmpUserOffsetX(0);
+        canvansDrawingEngine.setTmpUserOffsetY(0);
+        canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+        drag = false;
+    });
+    canvas.addEventListener('mousemove', (e) => {
+        if (drag) {
+            const diffX = e.pageX - dragStartX;
+            const diffY = e.pageY - dragStartY;
+            canvansDrawingEngine.setTmpUserOffsetX(diffX);
+            canvansDrawingEngine.setTmpUserOffsetY(diffY);
+            canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+        }
+    });
 };
 init();
 
