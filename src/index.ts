@@ -14,7 +14,7 @@ const init = () => {
 
     if (!ctx) return;
 
-    const canvansDrawingEngine = new CanvasDrawingEngine(ctx);
+    const canvansDrawingEngine = new CanvasDrawingEngine(ctx, SimulationConfiguration);
     const cityGenerator = new CityGenerator(SimulationConfiguration);
 
     const nextTick = () => {

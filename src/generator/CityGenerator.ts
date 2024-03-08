@@ -18,9 +18,14 @@ export class CityGenerator implements Iterator<StreetGraph> {
         this.currentTime = 0;
     }
 
+    getDistanceFromClosesGrowthPoint(position: Point): number {
+        const closestPointDistance = Math.min(...this.configuration.growthPoints.map(p => position.distance(p)));
+        return  closestPointDistance >= 1 ? closestPointDistance : 1;
+    }
+
     calucateGrowthCandidateProbablity(node: StreetNode): number {
         // console.log(node.position.distance(this.configuration.cityCenterPoint), this.streetGraph.getNodeValence(node), this.configuration.valenceRatio[this.streetGraph.getNodeValence(node) - 1])
-        return node.position.distance(this.configuration.cityCenterPoint) * this.configuration.valenceRatio[this.streetGraph.getNodeValence(node) - 1];
+        return 1 / Math.pow(this.getDistanceFromClosesGrowthPoint(node.position), 2) * this.configuration.valenceRatio[this.streetGraph.getNodeValence(node) - 1];
     }
 
     normalizeNumbers(numbers: number[]): number[] {
@@ -151,7 +156,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
         const allNodes = this.streetGraph.nodes.length;
 
         // check distribution again (for 4 valance nodes)
-        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v / allNodes));
+        console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v / allNodes));
         if (valenceDistributon['2'] / allNodes < this.configuration.valenceRatio[0]) return 1;
         if (valenceDistributon['3'] / allNodes < this.configuration.valenceRatio[1]) return 2;
         return 3;

@@ -3,7 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CanvasDrawingEngine = void 0;
 class CanvasDrawingEngine {
-    constructor(context) {
+    constructor(context, simulationCofiguration) {
         this.context = context;
         this.offsetX = 1920 / 2;
         this.offsetY = 1080 / 2;
@@ -12,6 +12,7 @@ class CanvasDrawingEngine {
         this.userOffsetY = 0;
         this.tmpUserOffsetX = 0;
         this.tmpUserOffsetY = 0;
+        this.simulationCofiguration = simulationCofiguration;
     }
     setScale(scale) {
         this.scale = scale;
@@ -42,6 +43,10 @@ class CanvasDrawingEngine {
         for (let newPoint of streetGraph.newPoints) {
             this.context.fillRect(newPoint.x * this.scale + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, newPoint.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY, 5, 5);
         }
+        this.context.fillStyle = "blue";
+        for (let growthPoint of this.simulationCofiguration.growthPoints) {
+            this.context.fillRect(growthPoint.x * this.scale + this.offsetX + this.userOffsetX + this.tmpUserOffsetX, growthPoint.y * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY, 10, 10);
+        }
     }
 }
 exports.CanvasDrawingEngine = CanvasDrawingEngine;
@@ -60,9 +65,13 @@ class CityGenerator {
         this.streetGraph = configuration.initialStreetGraph;
         this.currentTime = 0;
     }
+    getDistanceFromClosesGrowthPoint(position) {
+        const closestPointDistance = Math.min(...this.configuration.growthPoints.map(p => position.distance(p)));
+        return closestPointDistance >= 1 ? closestPointDistance : 1;
+    }
     calucateGrowthCandidateProbablity(node) {
         // console.log(node.position.distance(this.configuration.cityCenterPoint), this.streetGraph.getNodeValence(node), this.configuration.valenceRatio[this.streetGraph.getNodeValence(node) - 1])
-        return node.position.distance(this.configuration.cityCenterPoint) * this.configuration.valenceRatio[this.streetGraph.getNodeValence(node) - 1];
+        return 1 / Math.pow(this.getDistanceFromClosesGrowthPoint(node.position), 2) * this.configuration.valenceRatio[this.streetGraph.getNodeValence(node) - 1];
     }
     normalizeNumbers(numbers) {
         const sum = numbers.reduce((a, b) => a + b, 0);
@@ -172,7 +181,7 @@ class CityGenerator {
         const valenceDistributon = this.streetGraph.getValenceDistribution();
         const allNodes = this.streetGraph.nodes.length;
         // check distribution again (for 4 valance nodes)
-        // console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v / allNodes));
+        console.log(this.configuration.valenceRatio, Object.entries(valenceDistributon).sort(([key, _v], [key2, _v2]) => Number(key) - Number(key2)).map(([_key, v]) => v / allNodes));
         if (valenceDistributon['2'] / allNodes < this.configuration.valenceRatio[0])
             return 1;
         if (valenceDistributon['3'] / allNodes < this.configuration.valenceRatio[1])
@@ -282,7 +291,7 @@ const init = () => {
     let currentStreetGraph = null;
     if (!ctx)
         return;
-    const canvansDrawingEngine = new CanvasDrawingEngine_1.CanvasDrawingEngine(ctx);
+    const canvansDrawingEngine = new CanvasDrawingEngine_1.CanvasDrawingEngine(ctx, simulationConfiguration_1.default);
     const cityGenerator = new CityGenerator_1.CityGenerator(simulationConfiguration_1.default);
     const nextTick = () => {
         const { value: streetGraph, done } = cityGenerator.next();
@@ -368,16 +377,18 @@ const SimulationConfiguration = {
     // initial parameters
     initialStreetGraph: initialStreetGraph,
     cityCenterPoint: new StreetGraph_1.Point(400, 400),
+    // growthPoints: [new Point(0, 0)],
+    growthPoints: [new StreetGraph_1.Point(-400, -400), new StreetGraph_1.Point(400, 400), new StreetGraph_1.Point(1000, 1500)],
     // simulation
     numberOfYears: 10000000,
     timeStep: 1,
     // new nodes generation
-    generationAngle: Math.PI / 2.5,
-    streetsLength: 20,
+    generationAngle: Math.PI / 3,
+    streetsLength: 25,
     futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
     nodeCricusScanningR: 7,
     // streets
-    valenceRatio: [0.8, 0.1, 0.1],
+    valenceRatio: [0.7, 0.1, 0.2],
 };
 exports.default = SimulationConfiguration;
 

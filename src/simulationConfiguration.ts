@@ -10,6 +10,7 @@ export interface ISimulationConfiguration {
     generationAngle: number,
     futureIntersectionScanFactor: number,
     nodeCricusScanningR: number,
+    growthPoints: Point[]
 }
 
 const initialStreetGraph = new StreetGraph();
@@ -23,17 +24,18 @@ const SimulationConfiguration: ISimulationConfiguration = {
     // initial parameters
     initialStreetGraph: initialStreetGraph,
     cityCenterPoint: new Point(400, 400),
-
+    // growthPoints: [new Point(0, 0)],
+    growthPoints: [new Point(-400, -400), new Point(400, 400), new Point(1000, 1500)],
     // simulation
     numberOfYears: 10000000,
     timeStep: 1,
     // new nodes generation
-    generationAngle: Math.PI / 2.5,
-    streetsLength: 20,
+    generationAngle: Math.PI / 3,
+    streetsLength: 25,
     futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
     nodeCricusScanningR: 7,
     // streets
-    valenceRatio: [0.8, 0.1, 0.1],
+    valenceRatio: [0.7, 0.1, 0.2],
 }
 
 export default SimulationConfiguration; 
