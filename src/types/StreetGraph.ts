@@ -1,3 +1,5 @@
+import { CanvasDrawingEngine } from "../drawingEngine/CanvasDrawingEngine";
+
 export enum Hierarchy {
     Minor,
     Major,
@@ -21,6 +23,10 @@ export class Point {
         return Math.sqrt(Math.pow(this.x - a.x, 2) + Math.pow(this.y - a.y, 2));
     }
 
+    length() {
+        return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2));
+    }
+
     normalize() {
         const vectorLength = Math.sqrt(this.x * this.x + this.y * this.y);
         this.x = this.x / vectorLength;
@@ -28,11 +34,30 @@ export class Point {
     }
 
     vectorMultiply(vector: Point): Point {
-        return new Point(this.x * vector.x, this.y * vector.y)
+        return new Point(this.x * vector.x, this.y * vector.y);
+    }
+
+    scalarMultiplyVector(vector: Point): number {
+        return this.x * vector.x - this.y * vector.y;
+    }
+
+    getAngle(vector: Point): number {
+        const isConvexWithPerpendicularly = this.turnRight().scalarMultiplyVector(vector) >= 0;
+        const angle = Math.acos(((this.x * vector.x) + (this.y * vector.y)) / (this.length() * vector.length()));
+        if (isConvexWithPerpendicularly) return angle;
+        return 2 * Math.PI - angle;
     }
 
     vectorAdd(vector: Point): Point {
         return new Point(this.x + vector.x, this.y + vector.y)
+    }
+
+    vectorSubstract(vector: Point): Point {
+        return new Point(this.x - vector.x, this.y - vector.y)
+    }
+
+    reverse() {
+        return new Point((-1) * this.x, (-1) * this.y);
     }
 
     scalarMultiply(a: number): Point {
@@ -47,6 +72,9 @@ export class Point {
         return new Point(this.y, this.x * (-1));
     }
 
+    transpose() {
+        return new Point(this.y, this.x)
+    }
     rotate(angleInRadian: number): Point {
         const x2 = Math.cos(angleInRadian) * this.x - Math.sin(angleInRadian) * this.y;
         const y2 = Math.sin(angleInRadian) * this.x + Math.cos(angleInRadian) * this.y;
@@ -101,11 +129,15 @@ export class StreetNode {
 
 export class StreetEdge {
 
+    id: string;
     startNode: StreetNode;
     endNode: StreetNode;
     hierarchy: Hierarchy;
     width: number;
     status: StreetStatus;
+
+    startNodeAngle: number;
+    endNodeAngle: number;
 
     constructor(startNode: StreetNode, endNode: StreetNode, hierarchy: Hierarchy, width: number, status: StreetStatus) {
         this.startNode = startNode;
@@ -113,18 +145,62 @@ export class StreetEdge {
         this.hierarchy = hierarchy;
         this.width = width;
         this.status = status;
+        this.id = startNode.id < endNode.id ? startNode.id + ":" + endNode.id : endNode.id + ":" + startNode.id;
+        this.startNodeAngle = new Point(0, 1).getAngle(endNode.position.vectorSubstract(startNode.position));
+        this.endNodeAngle = new Point(0, 1).getAngle(startNode.position.vectorSubstract(endNode.position));
+    }
+
+    setStartNode(node: StreetNode) {
+        this.startNode = node;
+        this.startNodeAngle = new Point(0, 1).getAngle(this.endNode.position.vectorSubstract(this.startNode.position));
+        this.endNodeAngle = new Point(0, 1).getAngle(this.startNode.position.vectorSubstract(this.endNode.position));
+        this.id = this.startNode.id < this.endNode.id ? this.startNode.id + ":" + this.endNode.id : this.endNode.id + ":" + this.startNode.id;
+    }
+
+    setEndNode(node: StreetNode) {
+        this.endNode = node;
+        this.startNodeAngle = new Point(0, 1).getAngle(this.endNode.position.vectorSubstract(this.startNode.position));
+        this.endNodeAngle = new Point(0, 1).getAngle(this.startNode.position.vectorSubstract(this.endNode.position));
+        this.id = this.startNode.id < this.endNode.id ? this.startNode.id + ":" + this.endNode.id : this.endNode.id + ":" + this.startNode.id;
+    }
+
+    length() {
+        return this.endNode.position.distance(this.startNode.position);
     }
 }
+
+
+export class Face {
+    id: string;
+    nodes: StreetNode[];
+
+    constructor(nodes: StreetNode[]) {
+        const id = nodes.map(n => n.id).sort((id1, id2) => id1 - id2).join(':');
+        this.id = id;
+        this.nodes = nodes;
+    }
+}
+
 
 export class StreetGraph {
 
     edges: StreetEdge[];
+    edgesDict: { [edgeId: string]: StreetEdge };
+
     nodes: StreetNode[];
     graph: { [nodeId: number]: { [nodeId: number]: StreetEdge } };
+    clockwiseEdgesOrder: { [nodeId: number]: string[] };
+
+    facesDict: { [faceId: string]: Face };
+    facesList: Face[];
+
     newPoints: Point[];
     valence2edges: number;
     valence3edges: number;
     valence4edges: number;
+
+    nodesIds: number = 100;
+    canvansDrawingEngine: CanvasDrawingEngine | null;
 
     constructor() {
         this.edges = [];
@@ -134,12 +210,30 @@ export class StreetGraph {
         this.valence2edges = 0;
         this.valence3edges = 0;
         this.valence4edges = 0;
+        this.facesDict = {};
+        this.clockwiseEdgesOrder = {};
+        this.edgesDict = {};
+        this.facesList = [];
+        this.canvansDrawingEngine = null;
+    }
+
+    getNextNodeId() {
+        this.nodesIds += 1;
+        return this.nodesIds - 1;
+    }
+
+    setCanvansDrawingEngine(canvansDrawingEngine: CanvasDrawingEngine) {
+        this.canvansDrawingEngine = canvansDrawingEngine;
     }
 
     addStreet(street: StreetEdge) {
 
         const startNodeId = street.startNode.id;
         const endNodeId = street.endNode.id;
+
+        if (this.edgesDict[street.id]) {
+            return;
+        }
 
         if (!this.graph[startNodeId]) {
             this.nodes.push(street.startNode);
@@ -160,19 +254,42 @@ export class StreetGraph {
         this.graph[startNodeId][endNodeId] = street;
         this.graph[endNodeId][startNodeId] = street;
         this.edges.push(street);
+        this.edgesDict[street.id] = street;
+
+        // update clockwiseEdgesOrder
+        if (!this.clockwiseEdgesOrder[startNodeId]) this.clockwiseEdgesOrder[startNodeId] = [];
+        if (!this.clockwiseEdgesOrder[endNodeId]) this.clockwiseEdgesOrder[endNodeId] = [];
+
+        this.updateCloskwiseEdgesOrder(startNodeId);
+        this.updateCloskwiseEdgesOrder(endNodeId);
     }
 
+    updateCloskwiseEdgesOrder(nodeId: number) {
+        this.clockwiseEdgesOrder[nodeId] = Object.values(this.graph[nodeId]).sort((street1: StreetEdge, street2: StreetEdge) => {
+            const street1Angle = street1.startNode.id == nodeId ? street1.startNodeAngle : street1.endNodeAngle;
+            const street2Angle = street2.startNode.id == nodeId ? street2.startNodeAngle : street2.endNodeAngle
+            return street1Angle - street2Angle;
+        }).map(street => street.id);
+    }
+
+    // add logic for updateCloskwiseorder
     removeStreet(street: StreetEdge) {
         const startNodeId = street.startNode.id;
         const endNodeId = street.endNode.id;
 
         delete this.graph[startNodeId][endNodeId];
         delete this.graph[endNodeId][startNodeId];
+        delete this.edgesDict[street.id];
 
-        const index = this.edges.indexOf(street);
+        const index = this.edges.findIndex(s => s.id == street.id);
+
+        let l = this.edges.length;
         if (index > -1) {
             this.edges.splice(index, 1);
         }
+
+        this.updateCloskwiseEdgesOrder(startNodeId);
+        this.updateCloskwiseEdgesOrder(endNodeId);
     }
 
     getNodeValence(node: StreetNode) {
@@ -206,5 +323,163 @@ export class StreetGraph {
         }
 
         return valenceDistributon;
+    }
+
+    async wait(ms: number) {
+        return new Promise((res) => setTimeout(res, ms));
+    }
+
+    // clockvice travesal describe algorithm in thesis
+    async calcualteFaces() {
+        this.facesList = [];
+
+        for (let edge of this.edges) {
+
+            let nextNode = edge.endNode;
+            let currEdge = edge;
+
+            const path = [edge];
+            const pathNodes = [edge.startNode, edge.endNode];
+
+            // this.canvansDrawingEngine?.drawEdge(edge, "blue");
+
+            while (true) {
+
+                const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
+                if (!nextEdgeId) break;
+
+                currEdge = this.edgesDict[nextEdgeId];
+                // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+                // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+
+                nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+
+                pathNodes.push(nextNode);
+                path.push(currEdge);
+
+                // cycle found
+                if (nextNode.id == edge.startNode.id) {
+                    const face = new Face(pathNodes);
+                    this.facesList.push(face);
+                    if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
+                    // this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+                    break;
+                }
+            }
+
+        }
+
+        for (let edge of this.edges) {
+            // if (visitedEdges.has(edge.id)) continue;
+
+            let nextNode = edge.endNode;
+            let currEdge = edge;
+
+            const path = [edge];
+            const pathNodes = [edge.startNode, edge.endNode];
+
+            // this.canvansDrawingEngine?.drawEdge(edge, "blue");
+
+            while (true) {
+
+                const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
+                if (!nextEdgeId) break;
+
+                currEdge = this.edgesDict[nextEdgeId];
+                // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+                // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+
+                nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+
+                pathNodes.push(nextNode);
+                path.push(currEdge);
+
+                // cycle found
+                if (nextNode.id == edge.startNode.id) {
+                    const face = new Face(pathNodes);
+                    this.facesList.push(face);
+                    if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
+                    // this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+                    break;
+                }
+            }
+
+        }
+    }
+
+    async calcualteFace(edgeId: string) {
+
+        const edge = this.edgesDict[edgeId];
+        if (!edge) return;
+
+        let nextNode = edge.endNode;
+        let currEdge = edge;
+
+        const path = [edge];
+        const pathNodes = [edge.startNode, edge.endNode];
+
+        this.canvansDrawingEngine?.drawEdge(edge, "blue");
+
+        while (true) {
+
+            await this.wait(100);
+            const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
+            if (!nextEdgeId) break;
+
+            currEdge = this.edgesDict[nextEdgeId];
+            const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+            this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+
+            nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+
+            pathNodes.push(nextNode);
+            path.push(currEdge);
+
+            if (nextNode.id == edge.startNode.id) {
+                const face = new Face(pathNodes);
+                this.facesList.push(face);
+                if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
+                this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+                break;
+            }
+        }
+
+        while (true) {
+
+            await this.wait(100);
+            const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
+            if (!nextEdgeId) break;
+
+            currEdge = this.edgesDict[nextEdgeId];
+            const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+            this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+
+            nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+
+            pathNodes.push(nextNode);
+            path.push(currEdge);
+
+            if (nextNode.id == edge.startNode.id) {
+                const face = new Face(pathNodes);
+                this.facesList.push(face);
+                if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
+                this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+                break;
+            }
+        }
+    }
+
+    getClockwiseMostNode(edge: StreetEdge, currentNode: StreetNode) {
+        const nodeValence = this.clockwiseEdgesOrder[currentNode.id].length;
+        if (nodeValence == 1) return null;
+        const index = this.clockwiseEdgesOrder[currentNode.id].findIndex((id) => id == edge.id);
+        return this.clockwiseEdgesOrder[currentNode.id][index == nodeValence - 1 ? 0 : index + 1];
+    }
+
+    getCounterclockwiseMostNode(edge: StreetEdge, currentNode: StreetNode) {
+        const nodeValence = this.clockwiseEdgesOrder[currentNode.id].length;
+        if (nodeValence == 1) return null;
+        const index = this.clockwiseEdgesOrder[currentNode.id].findIndex((id) => id == edge.id);
+        return this.clockwiseEdgesOrder[currentNode.id][index == 0 ? nodeValence - 1 : index - 1];
     }
 }

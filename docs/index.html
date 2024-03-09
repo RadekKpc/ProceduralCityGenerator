@@ -10,11 +10,33 @@
     <canvas id="canvas" width="1920" height="1080" style="cursor: pointer;"></canvas>
 </body>
 
-<button id="nextTickButton">next</button>
+<button id="start">start</button>
 <button id="stop">stop</button>
+<button id="nextTickButton">next</button>
+<button id="calcualteFaces">calculateFaces</button>
+<button id="clearfaces">clearfaces</button>
 <button id="zoomIn">Zoom in</button>
 <button id="zoomOut">Zoom out</button>
 Can use scroll to zoomIn, zoomOut
+
+<div>
+    <label for="name">Node id</label>
+    <input type="text" id="nodeid" name="nodeid" size="10" />
+    <button id="printNodeinfo">print node info</button>
+</div>
+
+<div>
+    <label for="name">Edge id</label>
+    <input type="text" id="edgeId" name="edgeId" size="10" />
+    <button id="printEdgeinfo">print edge info</buttonf>
+</div>
+
+<div>
+    <label for="name">Edge id</label>
+    <input type="text" id="edgeId2" name="edgeId2" size="10" />
+    <button id="cycleFound">start cycle founding algorithm</buttonf>
+</div>
+
 <script src="bundle.js"></script>
 
 </html>
