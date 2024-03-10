@@ -3,41 +3,91 @@
 
 <head>
     <meta charset="utf-8" />
+    <link rel="stylesheet" href="index.css">
     <title>Procedural City Generatior</title>
 </head>
 
 <body>
-    <canvas id="canvas" width="1920" height="1080" style="cursor: pointer;"></canvas>
+    <div id="content_container">
+        <canvas id="canvas" width="1500" height="1000" style="cursor: pointer;"></canvas>
+        <div>
+            View configuration
+            <div class="section">
+                <div>
+                    <input type="checkbox" id="fillFaces" checked />
+                    Fill faces
+                </div>
+                <div>
+                    <input type="checkbox" id="drawMajorNodes" checked />
+                    Major nodes <div class="colorBox" style="background-color: red;"></div>
+                </div>
+                <div>
+                    <input type="checkbox" id="drawMinorNodes" checked />
+                    Minor nodes <div class="colorBox" style="background-color: blue;"></div>
+                </div>
+                <div>
+                    <input type="checkbox" id="showNewNodes"/>
+                    New nodes <div class="colorBox" style="background-color: green;"></div>
+                </div>
+                <div>
+                    <input type="checkbox" id="showGrowthCenters"/>
+                    Growth centers
+                    <div class="colorBox" style="background-color: orange;"></div>
+                </div>
+                <div>
+                    <button id="centerView" class="centerView">center veiw</button>
+                </div>
+            </div>
+
+            Simulation control
+            <div class="section">
+                <button id="start" class="inlineButton">start</button>
+                <button id="stop" class="inlineButton">stop</button>
+                <button id="nextTickButton" class="inlineButton">next</button>
+            </div>
+
+            Simulation actions
+            <div class="section">
+                <div>
+                    <button id="calcualteFaces">calculateFaces</button>
+                </div>
+                <div>
+                    <button id="splitFaces">splitFaces</button>
+                </div>
+                <div>
+                    <button id="generateSecondaryRoads">generateSecondaryRoads</button>
+                </div>
+                <div>
+                    <button id="expandMinorStreets">expandMinorStreets</button>
+                </div>
+            </div>
+
+            Information
+            <div class="section">
+                <div>
+                    <label for="name">Node id</label>
+                    <input type="text" id="nodeid" name="nodeid" size="10" />
+                    <button id="printNodeinfo">print node info</button>
+                </div>
+
+                <div>
+                    <label for="name">Edge id</label>
+                    <input type="text" id="edgeId" name="edgeId" size="10" />
+                    <button id="printEdgeinfo">print edge info</buttonf>
+                </div>
+
+                <div>
+                    <label for="name">Edge id</label>
+                    <input type="text" id="edgeId2" name="edgeId2" size="10" />
+                    <button id="cycleFound">start cycle founding algorithm</buttonf>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <script src="bundle.js"></script>
 </body>
-
-<button id="start">start</button>
-<button id="stop">stop</button>
-<button id="nextTickButton">next</button>
-<button id="calcualteFaces">calculateFaces</button>
-<button id="clearfaces">clearfaces</button>
-<button id="splitFaces">splitFaces</button>
-<button id="zoomIn">Zoom in</button>
-<button id="zoomOut">Zoom out</button>
-Can use scroll to zoomIn, zoomOut
-
-<div>
-    <label for="name">Node id</label>
-    <input type="text" id="nodeid" name="nodeid" size="10" />
-    <button id="printNodeinfo">print node info</button>
-</div>
-
-<div>
-    <label for="name">Edge id</label>
-    <input type="text" id="edgeId" name="edgeId" size="10" />
-    <button id="printEdgeinfo">print edge info</buttonf>
-</div>
-
-<div>
-    <label for="name">Edge id</label>
-    <input type="text" id="edgeId2" name="edgeId2" size="10" />
-    <button id="cycleFound">start cycle founding algorithm</buttonf>
-</div>
-
-<script src="bundle.js"></script>
 
 </html>

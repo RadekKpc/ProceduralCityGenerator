@@ -1,6 +1,6 @@
 import { ISimulationConfiguration } from "../simulationConfiguration";
-import { Point, StreetEdge, StreetGraph, StreetNode } from "../types/StreetGraph";
-import { IDrawingEngine } from "./IDrawingEngine";
+import { Hierarchy, StreetEdge, StreetGraph, StreetNode } from "../types/StreetGraph";
+import { DrawingConfiguration, IDrawingEngine } from "./IDrawingEngine";
 
 export class CanvasDrawingEngine implements IDrawingEngine {
 
@@ -13,17 +13,35 @@ export class CanvasDrawingEngine implements IDrawingEngine {
     tmpUserOffsetX: number;
     tmpUserOffsetY: number;
     simulationCofiguration: ISimulationConfiguration;
+    drawingConfiguration: DrawingConfiguration;
+    height: number;
+    width: number;
+    streetGraph: StreetGraph | null;
+    pointsSizes: number;
 
-    constructor(context: CanvasRenderingContext2D, simulationCofiguration: ISimulationConfiguration) {
+    constructor(context: CanvasRenderingContext2D, simulationCofiguration: ISimulationConfiguration, width: number, height: number, drawingConfiguration: DrawingConfiguration) {
         this.context = context;
-        this.offsetX = 1920 / 2;
-        this.offsetY = 1080 / 2;
+        this.offsetX = width / 2;
+        this.offsetY = height / 2;
+        this.width = width;
+        this.height = height;
         this.scale = 1;
         this.userOffsetX = 0;
         this.userOffsetY = 0;
         this.tmpUserOffsetX = 0;
         this.tmpUserOffsetY = 0;
         this.simulationCofiguration = simulationCofiguration;
+        this.drawingConfiguration = drawingConfiguration;
+        this.streetGraph = null;
+        this.pointsSizes = 5;
+    }
+
+    resetScale() {
+        this.scale = 1;
+        this.userOffsetX = 0;
+        this.userOffsetY = 0;
+        this.tmpUserOffsetX = 0;
+        this.tmpUserOffsetY = 0;
     }
 
     setScale(scale: number) {
@@ -54,13 +72,38 @@ export class CanvasDrawingEngine implements IDrawingEngine {
         return (position * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY);
     }
 
+    changeDrawingConiguration(drawingConfiguration: Partial<DrawingConfiguration>) {
+        this.drawingConfiguration = { ...this.drawingConfiguration, ...drawingConfiguration, };
+    }
+
+    redrawStreetGraph() {
+        if (this.streetGraph) this.drawStreets(this.streetGraph);
+    }
+
     drawStreets(streetGraph: StreetGraph): void {
-        this.context.clearRect(0, 0, 1920, 1080);
+        this.context.clearRect(0, 0, this.width, this.height);
+        this.streetGraph = streetGraph;
+
+        if (this.drawingConfiguration.fillFaces) {
+            for (let face of streetGraph.facesList) {
+
+                this.context.beginPath();
+                this.context.moveTo(this.getX(face.boundaryNodes[0].position.x), this.getY(face.boundaryNodes[0].position.y));
+                for (let node of face.boundaryNodes) {
+                    this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+                }
+                this.context.closePath();
+
+                this.context.fillStyle = face.color;
+                this.context.fill();
+            }
+        }
+
 
         this.context.strokeStyle = "black";
         this.context.fillStyle = "black";
 
-        for (let edge of streetGraph.edges) {
+        for (let edge of streetGraph.getEdges()) {
             this.context.lineWidth = edge.width;
             this.context.beginPath();
             this.context.moveTo(this.getX(edge.startNode.position.x), this.getY(edge.startNode.position.y));
@@ -68,32 +111,38 @@ export class CanvasDrawingEngine implements IDrawingEngine {
             this.context.stroke();
         }
 
-        this.context.fillStyle = "red";
+        if (this.drawingConfiguration.drawGrowthCenters) {
+            this.context.fillStyle = "orange";
 
-        for (let newPoint of streetGraph.newPoints) {
-            this.context.fillRect(this.getX(newPoint.x), this.getY(newPoint.y), 5, 5);
-        }
-
-        this.context.fillStyle = "blue";
-
-        for (let growthPoint of this.simulationCofiguration.growthPoints) {
-            this.context.fillRect(this.getX(growthPoint.x), this.getY(growthPoint.y), 10, 10);
-        }
-
-
-        console.log(streetGraph.facesList)
-        for (let face of streetGraph.facesList) {
-
-            this.context.beginPath();
-            this.context.moveTo(this.getX(face.nodes[0].position.x), this.getY(face.nodes[0].position.y));
-            for (let node of face.nodes) {
-                this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+            for (let growthPoint of this.simulationCofiguration.growthPoints) {
+                this.context.fillRect(this.getX(growthPoint.x) - this.pointsSizes, this.getY(growthPoint.y) - this.pointsSizes, 2 * this.pointsSizes, 2 * this.pointsSizes);
             }
-            this.context.closePath();
-
-            this.context.fillStyle = face.color;
-            this.context.fill();
         }
+
+        if (this.drawingConfiguration.drawMajorNodes) {
+            this.context.fillStyle = "red";
+
+            for (let point of streetGraph.nodes.filter(n => n.hierarchy == Hierarchy.Major)) {
+                this.context.fillRect(this.getX(point.position.x) - (this.pointsSizes / 2), this.getY(point.position.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+            }
+        }
+
+        if (this.drawingConfiguration.drawMinorNodes) {
+            this.context.fillStyle = "blue";
+
+            for (let point of streetGraph.nodes.filter(n => n.hierarchy == Hierarchy.Minor)) {
+                this.context.fillRect(this.getX(point.position.x) - (this.pointsSizes / 2), this.getY(point.position.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+            }
+        }
+
+        if (this.drawingConfiguration.drawNewPoints) {
+            this.context.fillStyle = "green";
+
+            for (let newPoint of streetGraph.newPoints) {
+                this.context.fillRect(this.getX(newPoint.x) - (this.pointsSizes / 2), this.getY(newPoint.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+            }
+        }
+
 
         // trainglesToDraw
         for (const traingle of streetGraph.trainglesToDraw) {

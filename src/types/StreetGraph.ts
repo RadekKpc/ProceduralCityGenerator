@@ -6,6 +6,13 @@ export enum Hierarchy {
     Minor,
     Major,
 }
+
+export enum StreetPattern {
+    Normal,
+    Grid,
+    Round,
+}
+
 export enum StreetStatus {
     Build,
     Planned
@@ -90,20 +97,20 @@ export class StreetNode {
     position: Point;
     hierarchy: Hierarchy;
     isGrowthing: boolean;
-    traffic: number;
     direction: Point; // normalized vector
     leftDirection: Point; // normalized vector
     rightDirection: Point; // normalized vector
     hasFront: boolean;
     hasRight: boolean;
     hasLeft: boolean
+    // traffic: number;
 
     constructor(id: number, position: Point, hierarchy: Hierarchy) {
         this.id = id;
         this.position = position;
         this.hierarchy = hierarchy;
         this.isGrowthing = true;
-        this.traffic = 0;
+        // this.traffic = 0;
         this.hasFront = false;
         this.hasRight = false;
         this.hasLeft = false;
@@ -112,9 +119,9 @@ export class StreetNode {
         this.rightDirection = new Point(0, 0);
     }
 
-    setTraffic(traffic: number) {
-        this.traffic = traffic;
-    }
+    // setTraffic(traffic: number) {
+    //     this.traffic = traffic;
+    // }
 
     setDirection(directionVector: Point) {
         this.direction = directionVector;
@@ -134,9 +141,10 @@ export class StreetEdge {
     id: string;
     startNode: StreetNode;
     endNode: StreetNode;
-    hierarchy: Hierarchy;
+
     width: number;
     status: StreetStatus;
+    hierarchy: Hierarchy;
 
     startNodeAngle: number;
     endNodeAngle: number;
@@ -171,32 +179,43 @@ export class StreetEdge {
     }
 }
 
+abstract class PlanarGraph {
+
+}
 
 export class Face {
     id: string;
-    path: string;
-    nodes: StreetNode[];
-    color: string;
+
+    boundaryNodes: StreetNode[];
+    boundaryStreets: StreetEdge[];
+
+    nodes: StreetNode[] = [];
+    streets: StreetEdge[] = [];
+
     traingles: [StreetNode, StreetNode, StreetNode][] = [];
     trainglesSurface: number[] = [];
     totalSurface: number = 0;
 
+    color: string;
+    isExpansionFinished = false;
+    areaStreetPattern: StreetPattern = StreetPattern.Normal;
 
-    constructor(nodes: StreetNode[]) {
-        const id = nodes.map(n => n.id).sort((id1, id2) => id1 - id2).join(':');
-        this.id = id;
-        this.path = nodes.map(n => n.id).join('_');
-        this.nodes = nodes;
+    constructor(boundaryNodes: StreetNode[], boundaryStreets: StreetEdge[]) {
+        this.id = boundaryNodes.map(n => n.id).sort((id1, id2) => id1 - id2).join(':');
+        this.boundaryNodes = boundaryNodes;
+        this.boundaryStreets = boundaryStreets;
+        this.nodes = [...boundaryNodes];
+        this.streets = [...boundaryStreets];
 
-        const traingles = earcut(nodes.flatMap(node => [node.position.x, node.position.y]));
+        const traingles = earcut(boundaryNodes.flatMap(node => [node.position.x, node.position.y]));
 
         for (let i = 0; i < traingles.length; i += 3) {
-            const p1 = nodes[traingles[i]];
-            const p2 = nodes[traingles[i + 1]];
-            const p3 = nodes[traingles[i + 2]];
+            const p1 = boundaryNodes[traingles[i]];
+            const p2 = boundaryNodes[traingles[i + 1]];
+            const p3 = boundaryNodes[traingles[i + 2]];
             this.traingles.push([p1, p2, p3]);
         }
-        // [StreetNode, StreetNode, StreetNode]
+
         this.trainglesSurface = this.traingles.map(([p1, p2, p3]: [StreetNode, StreetNode, StreetNode]) => {
             const a = p1.position.distance(p2.position);
             const b = p1.position.distance(p3.position);
@@ -206,8 +225,22 @@ export class Face {
 
         this.totalSurface = this.trainglesSurface.reduce((a, b) => a + b, 0);
 
-        const randomColor = Math.floor(Math.random() * 128 + 128).toString(16);
-        this.color = "#00" + randomColor + "00";
+        const randomColor = Math.floor(Math.random() * 256 + 0).toString(16);
+        const randomColor2 = Math.floor(Math.random() * 256 + 0).toString(16);
+        this.color = "#00" + randomColor + randomColor2;
+    }
+
+    getRandomPointInTriangle(selectedTraingle: [StreetNode, StreetNode, StreetNode]): Point {
+        const r1 = Math.random();
+        const r2 = Math.random();
+        const sqrt_r1 = Math.sqrt(r1);
+
+        const A = selectedTraingle[0].position.scalarMultiply(1 - sqrt_r1);
+        const B = selectedTraingle[1].position.scalarMultiply(sqrt_r1 * (1 - r2));
+        const C = selectedTraingle[2].position.scalarMultiply(r2 * sqrt_r1);
+
+        return A.vectorAdd(B).vectorAdd(C);
+
     }
 
     getRandomPointFromFace(): Point {
@@ -219,23 +252,43 @@ export class Face {
 
         // find random point in the selected traingle
         // https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle-in-3d
-        const r1 = Math.random();
-        const r2 = Math.random();
-        const sqrt_r1 = Math.sqrt(r1);
+        return this.getRandomPointInTriangle(selectedTraingle);
+    }
 
-        const A = selectedTraingle[0].position.scalarMultiply(1 - sqrt_r1);
-        const B = selectedTraingle[1].position.scalarMultiply(sqrt_r1 * (1 - r2));
-        const C = selectedTraingle[2].position.scalarMultiply(r2 * sqrt_r1);
+    getRandomTwoPoinsInTraingle(): [Point, Point] {
+        // select random traingle from face weighted by surface
+        const normalizedSurfaceRations = normalizeNumbers(this.trainglesSurface.map(surface => surface / this.totalSurface));
+        let traingleIndex = randomlySelectElementFromProbabilityDistribution(normalizedSurfaceRations);
+        traingleIndex = traingleIndex == -1 ? 0 : traingleIndex;
+        const selectedTraingle = this.traingles[traingleIndex]
 
-        return A.vectorAdd(B).vectorAdd(C);
+        // find random  two points in the selected traingle
+        // https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle-in-3d
+
+        const p1 = this.getRandomPointInTriangle(selectedTraingle);
+        const p2 = this.getRandomPointInTriangle(selectedTraingle);
+
+        return [p1, p2];
+    }
+
+    addStreet(street: StreetEdge) {
+        if (!this.streets.some(s => s.id == street.id)) {
+            this.streets.push(street);
+        };
+        if (!this.boundaryNodes.some(n => n.id == street.startNode.id)) {
+            this.nodes.push(street.startNode);
+        };
+        if (!this.boundaryNodes.some(n => n.id == street.endNode.id)) {
+            this.nodes.push(street.endNode);
+        };
+
     }
 }
 
 
 export class StreetGraph {
 
-    edges: StreetEdge[];
-    edgesDict: { [edgeId: string]: StreetEdge };
+    edges: { [edgeId: string]: StreetEdge };
 
     nodes: StreetNode[];
     graph: { [nodeId: number]: { [nodeId: number]: StreetEdge } };
@@ -254,8 +307,11 @@ export class StreetGraph {
     trainglesToDraw: StreetNode[][] = [];
     pointsToDraw: Point[] = [];
 
+    getEdges() {
+        return Object.values(this.edges)
+    }
+
     constructor() {
-        this.edges = [];
         this.nodes = [];
         this.newPoints = [];
         this.graph = {};
@@ -264,7 +320,7 @@ export class StreetGraph {
         this.valence4edges = 0;
         this.facesDict = {};
         this.clockwiseEdgesOrder = {};
-        this.edgesDict = {};
+        this.edges = {};
         this.facesList = [];
         this.canvansDrawingEngine = null;
     }
@@ -283,7 +339,7 @@ export class StreetGraph {
         const startNodeId = street.startNode.id;
         const endNodeId = street.endNode.id;
 
-        if (this.edgesDict[street.id]) {
+        if (this.edges[street.id]) {
             return;
         }
 
@@ -305,8 +361,7 @@ export class StreetGraph {
 
         this.graph[startNodeId][endNodeId] = street;
         this.graph[endNodeId][startNodeId] = street;
-        this.edges.push(street);
-        this.edgesDict[street.id] = street;
+        this.edges[street.id] = street;
 
         // update clockwiseEdgesOrder
         if (!this.clockwiseEdgesOrder[startNodeId]) this.clockwiseEdgesOrder[startNodeId] = [];
@@ -314,6 +369,11 @@ export class StreetGraph {
 
         this.updateCloskwiseEdgesOrder(startNodeId);
         this.updateCloskwiseEdgesOrder(endNodeId);
+    }
+
+    addMinorStreet(street: StreetEdge, face: Face) {
+        this.addStreet(street);
+        face.addStreet(street);
     }
 
     updateCloskwiseEdgesOrder(nodeId: number) {
@@ -331,14 +391,7 @@ export class StreetGraph {
 
         delete this.graph[startNodeId][endNodeId];
         delete this.graph[endNodeId][startNodeId];
-        delete this.edgesDict[street.id];
-
-        const index = this.edges.findIndex(s => s.id == street.id);
-
-        let l = this.edges.length;
-        if (index > -1) {
-            this.edges.splice(index, 1);
-        }
+        delete this.edges[street.id];
 
         this.updateCloskwiseEdgesOrder(startNodeId);
         this.updateCloskwiseEdgesOrder(endNodeId);
@@ -385,7 +438,7 @@ export class StreetGraph {
     async calcualteFaces() {
         this.facesList = [];
 
-        for (let edge of this.edges) {
+        for (let edge of this.getEdges()) {
 
             let nextNode = edge.endNode;
             let currEdge = edge;
@@ -402,7 +455,7 @@ export class StreetGraph {
                 const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
                 if (!nextEdgeId) break;
 
-                currEdge = this.edgesDict[nextEdgeId];
+                currEdge = this.edges[nextEdgeId];
                 // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
                 // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
 
@@ -415,7 +468,7 @@ export class StreetGraph {
                 path.push(currEdge);
                 // cycle found
                 if (nextNode.id == edge.startNode.id) {
-                    const face = new Face(pathNodes);
+                    const face = new Face(pathNodes, path);
 
                     if (!this.facesDict[face.id]) {
                         this.facesDict[face.id] = face;
@@ -429,7 +482,7 @@ export class StreetGraph {
 
         }
 
-        // for (let edge of this.edges) {
+        // for (let edge of this.getEdges()) {
 
         //     // await this.wait(100);
         //     let nextNode = edge.endNode;
@@ -445,7 +498,7 @@ export class StreetGraph {
         //         const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
         //         if (!nextEdgeId) break;
 
-        //         currEdge = this.edgesDict[nextEdgeId];
+        //         currEdge = this.edges[nextEdgeId];
         //         // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
         //         // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
 
@@ -474,7 +527,7 @@ export class StreetGraph {
 
     async calcualteFace(edgeId: string) {
 
-        const edge = this.edgesDict[edgeId];
+        const edge = this.edges[edgeId];
         if (!edge) return;
 
         let nextNode = edge.endNode;
@@ -491,7 +544,7 @@ export class StreetGraph {
             const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
             if (!nextEdgeId) break;
 
-            currEdge = this.edgesDict[nextEdgeId];
+            currEdge = this.edges[nextEdgeId];
             const randomColor = Math.floor(Math.random() * 16777215).toString(16);
             this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
 
@@ -501,7 +554,7 @@ export class StreetGraph {
             path.push(currEdge);
 
             if (nextNode.id == edge.startNode.id) {
-                const face = new Face(pathNodes);
+                const face = new Face(pathNodes, path);
                 this.facesList.push(face);
                 if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
                 this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
@@ -515,7 +568,7 @@ export class StreetGraph {
             const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
             if (!nextEdgeId) break;
 
-            currEdge = this.edgesDict[nextEdgeId];
+            currEdge = this.edges[nextEdgeId];
             const randomColor = Math.floor(Math.random() * 16777215).toString(16);
             this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
 
@@ -525,7 +578,7 @@ export class StreetGraph {
             path.push(currEdge);
 
             if (nextNode.id == edge.startNode.id) {
-                const face = new Face(pathNodes);
+                const face = new Face(pathNodes, path);
                 this.facesList.push(face);
                 if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
                 this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');

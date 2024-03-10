@@ -1,4 +1,5 @@
 import { CanvasDrawingEngine } from "./drawingEngine/CanvasDrawingEngine";
+import { DrawingConfiguration } from "./drawingEngine/IDrawingEngine";
 import { CityGenerator } from "./generator/CityGenerator";
 import SimulationConfiguration from "./simulationConfiguration";
 import { StreetGraph } from "./types/StreetGraph";
@@ -15,9 +16,62 @@ const init = () => {
 
     if (!ctx) return;
 
-    const canvansDrawingEngine = new CanvasDrawingEngine(ctx, SimulationConfiguration);
-    const cityGenerator = new CityGenerator(SimulationConfiguration);
+    const drawingConfiguration: DrawingConfiguration = {
+        fillFaces: true,
+        drawMajorNodes: true,
+        drawMinorNodes: true,
+        drawNewPoints: false,
+        drawGrowthCenters: false
+    }
 
+    const canvansDrawingEngine = new CanvasDrawingEngine(ctx, SimulationConfiguration, canvas.width, canvas.height, drawingConfiguration);
+    const cityGenerator = new CityGenerator(SimulationConfiguration);
+    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+
+
+
+    // view configuration settings
+    const fillFaces = (document.getElementById("fillFaces") as HTMLInputElement);
+    const drawMajorNodes = (document.getElementById("drawMajorNodes") as HTMLInputElement);
+    const drawMinorNodes = (document.getElementById("drawMinorNodes") as HTMLInputElement);
+    const showNewNodes = (document.getElementById("showNewNodes") as HTMLInputElement);
+    const showGrowthCenters = (document.getElementById("showGrowthCenters") as HTMLInputElement);
+
+    fillFaces.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ fillFaces: fillFaces.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    drawMajorNodes.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawMajorNodes: drawMajorNodes.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    drawMinorNodes.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawMinorNodes: drawMinorNodes.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    showNewNodes.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawNewPoints: showNewNodes.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    showGrowthCenters.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawGrowthCenters: showGrowthCenters.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    const centerView = document.getElementById("centerView");
+    if (centerView) centerView.onclick = () => {
+        canvansDrawingEngine.resetScale();
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    // simulaton control
+    const stopButton = document.getElementById("stop");
+    const startButton = document.getElementById("start");
+    const nextTickButton = document.getElementById("nextTickButton");
 
     const nextTick = () => {
         const { value: streetGraph, done } = cityGenerator.next();
@@ -31,73 +85,61 @@ const init = () => {
         canvansDrawingEngine.drawStreets(streetGraph);
     }
 
-    const nextTickButton = document.getElementById("nextTickButton");
-    if (nextTickButton) {
-        nextTickButton.onclick = nextTick;
+    if (nextTickButton) nextTickButton.onclick = nextTick;
+    if (stopButton) stopButton.style.display = 'none';
+    if (startButton) startButton.onclick = () => {
+        const interval = setInterval(nextTick, 0);
+        if (stopButton) {
+            stopButton.onclick = () => {
+                clearInterval(interval);
+                startButton.style.display = 'inline-block';
+                stopButton.style.display = 'none';
+            }
+            startButton.style.display = 'none';
+            stopButton.style.display = 'inline-block';
+        }
     }
+
 
     // action buttons
     const calcualteFaces = document.getElementById("calcualteFaces");
     if (calcualteFaces) calcualteFaces.onclick = () => {
         if (currentStreetGraph) currentStreetGraph.calcualteFaces();
-
-    }
-
-    const clearfaces = document.getElementById("clearfaces");
-    if (clearfaces) clearfaces.onclick = () => {
-        if (currentStreetGraph) currentStreetGraph.facesList = [];
-        if (currentStreetGraph) currentStreetGraph.facesDict = {};
+        canvansDrawingEngine.redrawStreetGraph();
     }
 
     const splitFaces = document.getElementById("splitFaces");
     if (splitFaces) splitFaces.onclick = () => {
-        if(currentStreetGraph) cityGenerator.splitFaces();
+        if (currentStreetGraph) cityGenerator.splitFaces();
+        canvansDrawingEngine.redrawStreetGraph();
     }
 
-    // start stop simulation
-    const stopButton = document.getElementById("stop");
-    const startButton = document.getElementById("start");
+    const generateSecondaryRoads = document.getElementById("generateSecondaryRoads");
+    if (generateSecondaryRoads) generateSecondaryRoads.onclick = () => {
+        if (currentStreetGraph) cityGenerator.generateSecondaryRoads();
+        canvansDrawingEngine.redrawStreetGraph();
+    }
 
-    if (stopButton) stopButton.style.display = 'none';
-
-
-    if (startButton) {
-        startButton.onclick = () => {
-            const interval = setInterval(nextTick, 0);
-            if (stopButton) {
-                stopButton.onclick = () => {
-                    clearInterval(interval);
-                    startButton.style.display = 'block';
-                    stopButton.style.display = 'none';
-                }
-                startButton.style.display = 'none';
-                stopButton.style.display = 'block';
-            }
-        }
+    const expandMinorStreets = document.getElementById("expandMinorStreets");
+    if (expandMinorStreets) expandMinorStreets.onclick = () => {
+        if (currentStreetGraph) cityGenerator.expandMinorStreets();
+        canvansDrawingEngine.redrawStreetGraph();
     }
 
 
-    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
-
-    // UI FUNCTIONS
     // ZOOMING
-    const zoomIn = document.getElementById('zoomIn');
-    const zoomOut = document.getElementById('zoomOut');
 
     const zoomInCallback = () => {
         SCALE *= 1.5;
         canvansDrawingEngine.setScale(SCALE);
-        canvansDrawingEngine.drawStreets(currentStreetGraph!);
+        canvansDrawingEngine.redrawStreetGraph();
     }
 
     const zoomOutCallback = () => {
         SCALE /= 1.5;
         canvansDrawingEngine.setScale(SCALE);
-        canvansDrawingEngine.drawStreets(currentStreetGraph!);
+        canvansDrawingEngine.redrawStreetGraph();
     }
-
-    zoomIn?.addEventListener("click", zoomInCallback);
-    zoomOut?.addEventListener("click", zoomOutCallback);
 
 
     canvas.addEventListener('wheel', (e) => {
@@ -166,7 +208,7 @@ const init = () => {
     const printEdgeinfoButton = document.getElementById('printEdgeinfo');
     const printEdgeinfo = () => {
         const edgeId = (document.getElementById('edgeId') as HTMLInputElement).value;
-        const edge = currentStreetGraph?.edgesDict[edgeId];
+        const edge = currentStreetGraph?.edges[edgeId];
         if (edge) {
             canvansDrawingEngine.drawEdge(edge, 'blue')
 

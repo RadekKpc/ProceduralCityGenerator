@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "cp src/index.html build & tsc --watch & watchify build/index.js -o build/bundle.js",
-    "pages": "cp build/index.html docs/index.html & cp build/bundle.js docs/bundle.js"
+    "dev": "cp src/index.html build & cp src/index.css build & tsc --watch & watchify build/index.js -o build/bundle.js",
+    "pages": "cp build/index.html docs/index.html & cp build/bundle.js docs/bundle.js & cp build/index.css docs/index.css"
   },
   "repository": {
     "type": "git",

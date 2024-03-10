@@ -2,17 +2,30 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CanvasDrawingEngine = void 0;
+const StreetGraph_1 = require("../types/StreetGraph");
 class CanvasDrawingEngine {
-    constructor(context, simulationCofiguration) {
+    constructor(context, simulationCofiguration, width, height, drawingConfiguration) {
         this.context = context;
-        this.offsetX = 1920 / 2;
-        this.offsetY = 1080 / 2;
+        this.offsetX = width / 2;
+        this.offsetY = height / 2;
+        this.width = width;
+        this.height = height;
         this.scale = 1;
         this.userOffsetX = 0;
         this.userOffsetY = 0;
         this.tmpUserOffsetX = 0;
         this.tmpUserOffsetY = 0;
         this.simulationCofiguration = simulationCofiguration;
+        this.drawingConfiguration = drawingConfiguration;
+        this.streetGraph = null;
+        this.pointsSizes = 5;
+    }
+    resetScale() {
+        this.scale = 1;
+        this.userOffsetX = 0;
+        this.userOffsetY = 0;
+        this.tmpUserOffsetX = 0;
+        this.tmpUserOffsetY = 0;
     }
     setScale(scale) {
         this.scale = scale;
@@ -35,35 +48,60 @@ class CanvasDrawingEngine {
     getY(position) {
         return (position * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY);
     }
+    changeDrawingConiguration(drawingConfiguration) {
+        this.drawingConfiguration = Object.assign(Object.assign({}, this.drawingConfiguration), drawingConfiguration);
+    }
+    redrawStreetGraph() {
+        if (this.streetGraph)
+            this.drawStreets(this.streetGraph);
+    }
     drawStreets(streetGraph) {
-        this.context.clearRect(0, 0, 1920, 1080);
+        this.context.clearRect(0, 0, this.width, this.height);
+        this.streetGraph = streetGraph;
+        if (this.drawingConfiguration.fillFaces) {
+            for (let face of streetGraph.facesList) {
+                this.context.beginPath();
+                this.context.moveTo(this.getX(face.boundaryNodes[0].position.x), this.getY(face.boundaryNodes[0].position.y));
+                for (let node of face.boundaryNodes) {
+                    this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+                }
+                this.context.closePath();
+                this.context.fillStyle = face.color;
+                this.context.fill();
+            }
+        }
         this.context.strokeStyle = "black";
         this.context.fillStyle = "black";
-        for (let edge of streetGraph.edges) {
+        for (let edge of streetGraph.getEdges()) {
             this.context.lineWidth = edge.width;
             this.context.beginPath();
             this.context.moveTo(this.getX(edge.startNode.position.x), this.getY(edge.startNode.position.y));
             this.context.lineTo(this.getX(edge.endNode.position.x), this.getY(edge.endNode.position.y));
             this.context.stroke();
         }
-        this.context.fillStyle = "red";
-        for (let newPoint of streetGraph.newPoints) {
-            this.context.fillRect(this.getX(newPoint.x), this.getY(newPoint.y), 5, 5);
-        }
-        this.context.fillStyle = "blue";
-        for (let growthPoint of this.simulationCofiguration.growthPoints) {
-            this.context.fillRect(this.getX(growthPoint.x), this.getY(growthPoint.y), 10, 10);
-        }
-        console.log(streetGraph.facesList);
-        for (let face of streetGraph.facesList) {
-            this.context.beginPath();
-            this.context.moveTo(this.getX(face.nodes[0].position.x), this.getY(face.nodes[0].position.y));
-            for (let node of face.nodes) {
-                this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+        if (this.drawingConfiguration.drawGrowthCenters) {
+            this.context.fillStyle = "orange";
+            for (let growthPoint of this.simulationCofiguration.growthPoints) {
+                this.context.fillRect(this.getX(growthPoint.x) - this.pointsSizes, this.getY(growthPoint.y) - this.pointsSizes, 2 * this.pointsSizes, 2 * this.pointsSizes);
             }
-            this.context.closePath();
-            this.context.fillStyle = face.color;
-            this.context.fill();
+        }
+        if (this.drawingConfiguration.drawMajorNodes) {
+            this.context.fillStyle = "red";
+            for (let point of streetGraph.nodes.filter(n => n.hierarchy == StreetGraph_1.Hierarchy.Major)) {
+                this.context.fillRect(this.getX(point.position.x) - (this.pointsSizes / 2), this.getY(point.position.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+            }
+        }
+        if (this.drawingConfiguration.drawMinorNodes) {
+            this.context.fillStyle = "blue";
+            for (let point of streetGraph.nodes.filter(n => n.hierarchy == StreetGraph_1.Hierarchy.Minor)) {
+                this.context.fillRect(this.getX(point.position.x) - (this.pointsSizes / 2), this.getY(point.position.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+            }
+        }
+        if (this.drawingConfiguration.drawNewPoints) {
+            this.context.fillStyle = "green";
+            for (let newPoint of streetGraph.newPoints) {
+                this.context.fillRect(this.getX(newPoint.x) - (this.pointsSizes / 2), this.getY(newPoint.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+            }
         }
         // trainglesToDraw
         for (const traingle of streetGraph.trainglesToDraw) {
@@ -109,7 +147,7 @@ class CanvasDrawingEngine {
 }
 exports.CanvasDrawingEngine = CanvasDrawingEngine;
 
-},{}],2:[function(require,module,exports){
+},{"../types/StreetGraph":7}],2:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CityGenerator = void 0;
@@ -129,7 +167,9 @@ class CityGenerator {
         return closestPointDistance >= 1 ? closestPointDistance : 1;
     }
     calucateGrowthCandidateProbablity(node) {
-        return Math.pow(Math.E, (-1) * Math.pow(this.configuration.focusedGrowthFunc(this.getDistanceFromClosesGrowthPoint(node.position)), 2));
+        if (node.hierarchy == StreetGraph_1.Hierarchy.Major)
+            return Math.pow(Math.E, (-1) * Math.pow(this.configuration.focusedGrowthFunc(this.getDistanceFromClosesGrowthPoint(node.position)), 2));
+        return 1;
     }
     scanAround(scanPosition) {
         for (let node of this.streetGraph.nodes) {
@@ -139,14 +179,14 @@ class CityGenerator {
         }
         return null;
     }
-    generateNewStreet(direction, strategy, startNode) {
+    generateNewStreet(direction, startNode) {
         const [newNodePosition, futureIntersectionScanPosition] = new NormalStreetsPattern_1.NormalStreetsPattern().getNewNodeLocation(direction, startNode, this.configuration);
-        const newNode = new StreetGraph_1.StreetNode(this.streetGraph.getNextNodeId(), newNodePosition, StreetGraph_1.Hierarchy.Major);
-        const newStreet = new StreetGraph_1.StreetEdge(startNode, newNode, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+        const newNode = new StreetGraph_1.StreetNode(this.streetGraph.getNextNodeId(), newNodePosition, startNode.hierarchy);
+        const newStreet = new StreetGraph_1.StreetEdge(startNode, newNode, startNode.hierarchy, startNode.hierarchy == StreetGraph_1.Hierarchy.Major ? 3 : 1, StreetGraph_1.StreetStatus.Build);
         // check for intersection or future intersection
         let closestInetrsectionPoint = null;
         let intersectionStreet = null;
-        for (let edge of this.streetGraph.edges) {
+        for (let edge of this.streetGraph.getEdges()) {
             if (edge.startNode.id != startNode.id && edge.endNode.id != startNode.id) {
                 const intersectionPoint = (0, utils_1.calculateIntersection)(edge.startNode.position, edge.endNode.position, newStreet.startNode.position, futureIntersectionScanPosition);
                 if (intersectionPoint) {
@@ -172,10 +212,11 @@ class CityGenerator {
             }
             // cut graph
             newNode.setPosition(closestInetrsectionPoint);
+            newNode.hierarchy = intersectionStreet.hierarchy;
             // they should inherit all proeprties
-            const part1Street = new StreetGraph_1.StreetEdge(intersectionStreet.startNode, newNode, intersectionStreet.hierarchy, 3, intersectionStreet.status);
-            const part2Street = new StreetGraph_1.StreetEdge(intersectionStreet.endNode, newNode, intersectionStreet.hierarchy, 3, intersectionStreet.status);
-            const newStreet2 = new StreetGraph_1.StreetEdge(startNode, newNode, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
+            const part1Street = new StreetGraph_1.StreetEdge(intersectionStreet.startNode, newNode, intersectionStreet.hierarchy, intersectionStreet.width, intersectionStreet.status);
+            const part2Street = new StreetGraph_1.StreetEdge(intersectionStreet.endNode, newNode, intersectionStreet.hierarchy, intersectionStreet.width, intersectionStreet.status);
+            const newStreet2 = new StreetGraph_1.StreetEdge(startNode, newNode, startNode.hierarchy, startNode.hierarchy == StreetGraph_1.Hierarchy.Major ? 3 : 1, StreetGraph_1.StreetStatus.Build);
             if (newStreet2.length() < this.configuration.minSteetSegmentLength)
                 return { newStreets: [], streetsToRemove: [] };
             return {
@@ -205,26 +246,26 @@ class CityGenerator {
         const nodeValence = this.streetGraph.getNodeValence(node);
         if (nodeValence == 1) {
             node.hasFront = true;
-            return this.generateNewStreet(node.direction, null, node);
+            return this.generateNewStreet(node.direction, node);
         }
         if (nodeValence == 2) {
             if (Math.random() < 0.5) {
                 node.hasLeft = true;
-                return this.generateNewStreet(node.leftDirection, null, node);
+                return this.generateNewStreet(node.leftDirection, node);
             }
             else {
                 node.hasRight = true;
-                return this.generateNewStreet(node.rightDirection, null, node);
+                return this.generateNewStreet(node.rightDirection, node);
             }
         }
         if (nodeValence == 3) {
             node.isGrowthing = false;
             if (node.hasLeft) {
                 node.hasRight = true;
-                return this.generateNewStreet(node.rightDirection, null, node);
+                return this.generateNewStreet(node.rightDirection, node);
             }
             node.hasLeft = true;
-            return this.generateNewStreet(node.leftDirection, null, node);
+            return this.generateNewStreet(node.leftDirection, node);
         }
         return {
             newStreets: [],
@@ -254,22 +295,83 @@ class CityGenerator {
             const point = face.getRandomPointFromFace();
             this.streetGraph.pointsToDraw.push(point);
         }
-        this.fillDistinctWithSecondaryRoads(face);
+        for (let traingle of face.traingles) {
+            this.streetGraph.trainglesToDraw.push(traingle);
+        }
         this.nextFace += 1;
     }
     splitFaces() {
         for (let face of this.streetGraph.facesList) {
-            this.fillDistinctWithSecondaryRoads(face);
+            for (let traingle of face.traingles) {
+                this.streetGraph.trainglesToDraw.push(traingle);
+            }
             for (let i = 0; i < 10; i++) {
                 const point = face.getRandomPointFromFace();
                 this.streetGraph.pointsToDraw.push(point);
             }
         }
     }
-    fillDistinctWithSecondaryRoads(face) {
-        const traingles = face.traingles;
-        for (let traingle of traingles) {
-            this.streetGraph.trainglesToDraw.push(traingle);
+    generateSecondaryRoads() {
+        console.log('this.streetGraph.facesList', this.streetGraph.facesList);
+        for (let face of this.streetGraph.facesList) {
+            this.fillFaceWithRoads(face);
+        }
+    }
+    expandMinorStreets() {
+        for (let face of this.streetGraph.facesList) {
+            for (let i = 0; i < 30; i++) {
+                this.expandMinorStreet(face);
+            }
+        }
+    }
+    fillFaceWithRoads(face) {
+        let isProperLength = false;
+        let newEdge;
+        for (let i = 0; i < 10; i++) {
+            const [startPoint1, startPoint2] = face.getRandomTwoPoinsInTraingle();
+            const node1 = new StreetGraph_1.StreetNode(this.streetGraph.getNextNodeId(), startPoint1, StreetGraph_1.Hierarchy.Minor);
+            const node2 = new StreetGraph_1.StreetNode(this.streetGraph.getNextNodeId(), startPoint2, StreetGraph_1.Hierarchy.Minor);
+            newEdge = new StreetGraph_1.StreetEdge(node1, node2, StreetGraph_1.Hierarchy.Minor, 1, StreetGraph_1.StreetStatus.Planned);
+            if (newEdge.length() >= this.configuration.minimumInitialStreetLength) {
+                isProperLength = true;
+                break;
+            }
+        }
+        if (!isProperLength || !newEdge) {
+            console.log('could not find proper new street for face');
+            return;
+        }
+        this.streetGraph.addMinorStreet(newEdge, face);
+        // while(!face.isExpansionFinished) {
+        // }
+        // for (let i = 0; i < 30; i++) {
+        //     this.expandMinorStreet(face);
+        // }
+    }
+    expandMinorStreet(face) {
+        let growthCandidates = face.nodes.filter(node => node.isGrowthing && node.hierarchy == StreetGraph_1.Hierarchy.Minor);
+        const candidatesProbabilites = growthCandidates.map(candidate => this.calucateGrowthCandidateProbablity(candidate));
+        const normalizedCandidatesProbabilities = (0, utils_1.normalizeNumbers)(candidatesProbabilites);
+        const randomNodeIndex = (0, utils_1.randomlySelectElementFromProbabilityDistribution)(normalizedCandidatesProbabilities);
+        if (randomNodeIndex == -1) {
+            // console.log("coud not find candidate");
+            return {
+                done: this.currentTime == this.configuration.numberOfYears,
+                value: this.streetGraph
+            };
+        }
+        const randomNode = growthCandidates[randomNodeIndex];
+        const expansionResult = this.expandNode(randomNode);
+        // console.log('expansionResult', expansionResult)
+        this.streetGraph.clearNewPoints();
+        for (let newStreet of expansionResult.newStreets) {
+            this.streetGraph.addMinorStreet(newStreet, face); // check it twice
+            // below 2 lines are tmp
+            this.streetGraph.addNewPoint(newStreet.endNode.position);
+            this.streetGraph.addNewPoint(newStreet.startNode.position);
+        }
+        for (let streetToRemove of expansionResult.streetsToRemove) {
+            this.streetGraph.removeStreet(streetToRemove); // to be done
         }
     }
     next() {
@@ -298,6 +400,7 @@ class CityGenerator {
         this.streetGraph.clearNewPoints();
         for (let newStreet of expansionResult.newStreets) {
             this.streetGraph.addStreet(newStreet); // check it twice
+            // below 2 lines are tmp
             this.streetGraph.addNewPoint(newStreet.endNode.position);
             this.streetGraph.addNewPoint(newStreet.startNode.position);
         }
@@ -402,8 +505,52 @@ const init = () => {
     let currentStreetGraph = null;
     if (!ctx)
         return;
-    const canvansDrawingEngine = new CanvasDrawingEngine_1.CanvasDrawingEngine(ctx, simulationConfiguration_1.default);
+    const drawingConfiguration = {
+        fillFaces: true,
+        drawMajorNodes: true,
+        drawMinorNodes: true,
+        drawNewPoints: false,
+        drawGrowthCenters: false
+    };
+    const canvansDrawingEngine = new CanvasDrawingEngine_1.CanvasDrawingEngine(ctx, simulationConfiguration_1.default, canvas.width, canvas.height, drawingConfiguration);
     const cityGenerator = new CityGenerator_1.CityGenerator(simulationConfiguration_1.default);
+    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
+    // view configuration settings
+    const fillFaces = document.getElementById("fillFaces");
+    const drawMajorNodes = document.getElementById("drawMajorNodes");
+    const drawMinorNodes = document.getElementById("drawMinorNodes");
+    const showNewNodes = document.getElementById("showNewNodes");
+    const showGrowthCenters = document.getElementById("showGrowthCenters");
+    fillFaces.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ fillFaces: fillFaces.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    };
+    drawMajorNodes.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawMajorNodes: drawMajorNodes.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    };
+    drawMinorNodes.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawMinorNodes: drawMinorNodes.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    };
+    showNewNodes.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawNewPoints: showNewNodes.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    };
+    showGrowthCenters.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ drawGrowthCenters: showGrowthCenters.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    };
+    const centerView = document.getElementById("centerView");
+    if (centerView)
+        centerView.onclick = () => {
+            canvansDrawingEngine.resetScale();
+            canvansDrawingEngine.redrawStreetGraph();
+        };
+    // simulaton control
+    const stopButton = document.getElementById("stop");
+    const startButton = document.getElementById("start");
+    const nextTickButton = document.getElementById("nextTickButton");
     const nextTick = () => {
         const { value: streetGraph, done } = cityGenerator.next();
         currentStreetGraph = streetGraph;
@@ -414,67 +561,63 @@ const init = () => {
         }
         canvansDrawingEngine.drawStreets(streetGraph);
     };
-    const nextTickButton = document.getElementById("nextTickButton");
-    if (nextTickButton) {
+    if (nextTickButton)
         nextTickButton.onclick = nextTick;
-    }
+    if (stopButton)
+        stopButton.style.display = 'none';
+    if (startButton)
+        startButton.onclick = () => {
+            const interval = setInterval(nextTick, 0);
+            if (stopButton) {
+                stopButton.onclick = () => {
+                    clearInterval(interval);
+                    startButton.style.display = 'inline-block';
+                    stopButton.style.display = 'none';
+                };
+                startButton.style.display = 'none';
+                stopButton.style.display = 'inline-block';
+            }
+        };
     // action buttons
     const calcualteFaces = document.getElementById("calcualteFaces");
     if (calcualteFaces)
         calcualteFaces.onclick = () => {
             if (currentStreetGraph)
                 currentStreetGraph.calcualteFaces();
-        };
-    const clearfaces = document.getElementById("clearfaces");
-    if (clearfaces)
-        clearfaces.onclick = () => {
-            if (currentStreetGraph)
-                currentStreetGraph.facesList = [];
-            if (currentStreetGraph)
-                currentStreetGraph.facesDict = {};
+            canvansDrawingEngine.redrawStreetGraph();
         };
     const splitFaces = document.getElementById("splitFaces");
     if (splitFaces)
         splitFaces.onclick = () => {
             if (currentStreetGraph)
                 cityGenerator.splitFaces();
+            canvansDrawingEngine.redrawStreetGraph();
         };
-    // start stop simulation
-    const stopButton = document.getElementById("stop");
-    const startButton = document.getElementById("start");
-    if (stopButton)
-        stopButton.style.display = 'none';
-    if (startButton) {
-        startButton.onclick = () => {
-            const interval = setInterval(nextTick, 0);
-            if (stopButton) {
-                stopButton.onclick = () => {
-                    clearInterval(interval);
-                    startButton.style.display = 'block';
-                    stopButton.style.display = 'none';
-                };
-                startButton.style.display = 'none';
-                stopButton.style.display = 'block';
-            }
+    const generateSecondaryRoads = document.getElementById("generateSecondaryRoads");
+    if (generateSecondaryRoads)
+        generateSecondaryRoads.onclick = () => {
+            if (currentStreetGraph)
+                cityGenerator.generateSecondaryRoads();
+            canvansDrawingEngine.redrawStreetGraph();
         };
-    }
-    canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
-    // UI FUNCTIONS
+    const expandMinorStreets = document.getElementById("expandMinorStreets");
+    if (expandMinorStreets)
+        expandMinorStreets.onclick = () => {
+            if (currentStreetGraph)
+                cityGenerator.expandMinorStreets();
+            canvansDrawingEngine.redrawStreetGraph();
+        };
     // ZOOMING
-    const zoomIn = document.getElementById('zoomIn');
-    const zoomOut = document.getElementById('zoomOut');
     const zoomInCallback = () => {
         SCALE *= 1.5;
         canvansDrawingEngine.setScale(SCALE);
-        canvansDrawingEngine.drawStreets(currentStreetGraph);
+        canvansDrawingEngine.redrawStreetGraph();
     };
     const zoomOutCallback = () => {
         SCALE /= 1.5;
         canvansDrawingEngine.setScale(SCALE);
-        canvansDrawingEngine.drawStreets(currentStreetGraph);
+        canvansDrawingEngine.redrawStreetGraph();
     };
-    zoomIn === null || zoomIn === void 0 ? void 0 : zoomIn.addEventListener("click", zoomInCallback);
-    zoomOut === null || zoomOut === void 0 ? void 0 : zoomOut.addEventListener("click", zoomOutCallback);
     canvas.addEventListener('wheel', (e) => {
         if (e.deltaY > 0) {
             zoomInCallback();
@@ -531,7 +674,7 @@ const init = () => {
     const printEdgeinfoButton = document.getElementById('printEdgeinfo');
     const printEdgeinfo = () => {
         const edgeId = document.getElementById('edgeId').value;
-        const edge = currentStreetGraph === null || currentStreetGraph === void 0 ? void 0 : currentStreetGraph.edgesDict[edgeId];
+        const edge = currentStreetGraph === null || currentStreetGraph === void 0 ? void 0 : currentStreetGraph.edges[edgeId];
         if (edge) {
             canvansDrawingEngine.drawEdge(edge, 'blue');
             printNodeInfo(edge.startNode.id, 'green');
@@ -559,23 +702,23 @@ const StreetGraph_1 = require("./types/StreetGraph");
 const initialStreetGraph = new StreetGraph_1.StreetGraph();
 const StreetNode1 = new StreetGraph_1.StreetNode(0, new StreetGraph_1.Point(0, 0), StreetGraph_1.Hierarchy.Major);
 const StreetNode2 = new StreetGraph_1.StreetNode(1, new StreetGraph_1.Point(50, 0), StreetGraph_1.Hierarchy.Major);
-const street1 = new StreetGraph_1.StreetEdge(StreetNode1, StreetNode2, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street1 = new StreetGraph_1.StreetEdge(StreetNode1, StreetNode2, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const StreetNode3 = new StreetGraph_1.StreetNode(3, new StreetGraph_1.Point(100, 0), StreetGraph_1.Hierarchy.Major);
-const street2 = new StreetGraph_1.StreetEdge(StreetNode2, StreetNode3, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street2 = new StreetGraph_1.StreetEdge(StreetNode2, StreetNode3, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const StreetNode4 = new StreetGraph_1.StreetNode(4, new StreetGraph_1.Point(150, 0), StreetGraph_1.Hierarchy.Major);
-const street3 = new StreetGraph_1.StreetEdge(StreetNode3, StreetNode4, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street3 = new StreetGraph_1.StreetEdge(StreetNode3, StreetNode4, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const StreetNode5 = new StreetGraph_1.StreetNode(5, new StreetGraph_1.Point(150, 200), StreetGraph_1.Hierarchy.Major);
-const street4 = new StreetGraph_1.StreetEdge(StreetNode4, StreetNode5, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street4 = new StreetGraph_1.StreetEdge(StreetNode4, StreetNode5, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const StreetNode6 = new StreetGraph_1.StreetNode(6, new StreetGraph_1.Point(120, 200), StreetGraph_1.Hierarchy.Major);
-const street5 = new StreetGraph_1.StreetEdge(StreetNode5, StreetNode6, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street5 = new StreetGraph_1.StreetEdge(StreetNode5, StreetNode6, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const StreetNode7 = new StreetGraph_1.StreetNode(7, new StreetGraph_1.Point(0, 200), StreetGraph_1.Hierarchy.Major);
-const street6 = new StreetGraph_1.StreetEdge(StreetNode6, StreetNode7, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
-const street7 = new StreetGraph_1.StreetEdge(StreetNode7, StreetNode1, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street6 = new StreetGraph_1.StreetEdge(StreetNode6, StreetNode7, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
+const street7 = new StreetGraph_1.StreetEdge(StreetNode7, StreetNode1, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const StreetNode8 = new StreetGraph_1.StreetNode(8, new StreetGraph_1.Point(100, 100), StreetGraph_1.Hierarchy.Major);
-const street8 = new StreetGraph_1.StreetEdge(StreetNode3, StreetNode8, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street8 = new StreetGraph_1.StreetEdge(StreetNode3, StreetNode8, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const StreetNode9 = new StreetGraph_1.StreetNode(9, new StreetGraph_1.Point(120, 100), StreetGraph_1.Hierarchy.Major);
-const street9 = new StreetGraph_1.StreetEdge(StreetNode6, StreetNode9, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
-const street10 = new StreetGraph_1.StreetEdge(StreetNode8, StreetNode9, StreetGraph_1.Hierarchy.Major, 1, StreetGraph_1.StreetStatus.Build);
+const street9 = new StreetGraph_1.StreetEdge(StreetNode6, StreetNode9, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
+const street10 = new StreetGraph_1.StreetEdge(StreetNode8, StreetNode9, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 initialStreetGraph.addStreet(street1);
 // initialStreetGraph.addStreet(street2);
 // initialStreetGraph.addStreet(street3);
@@ -601,9 +744,11 @@ const SimulationConfiguration = {
     generationAngle: Math.PI / 2,
     streetsLength: 50,
     futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
-    nodeCricusScanningR: 25,
+    nodeCricusScanningR: 0, // causes minor streets to go out of face (if another node is found)
     // streets
     valence2to3or4Ratio: 0.99,
+    // secondary roads
+    minimumInitialStreetLength: 10
 };
 exports.default = SimulationConfiguration;
 
@@ -622,7 +767,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.StreetGraph = exports.Face = exports.StreetEdge = exports.StreetNode = exports.Point = exports.StreetStatus = exports.Hierarchy = void 0;
+exports.StreetGraph = exports.Face = exports.StreetEdge = exports.StreetNode = exports.Point = exports.StreetStatus = exports.StreetPattern = exports.Hierarchy = void 0;
 const earcut_1 = __importDefault(require("earcut"));
 const utils_1 = require("../generator/utils");
 var Hierarchy;
@@ -630,6 +775,12 @@ var Hierarchy;
     Hierarchy[Hierarchy["Minor"] = 0] = "Minor";
     Hierarchy[Hierarchy["Major"] = 1] = "Major";
 })(Hierarchy || (exports.Hierarchy = Hierarchy = {}));
+var StreetPattern;
+(function (StreetPattern) {
+    StreetPattern[StreetPattern["Normal"] = 0] = "Normal";
+    StreetPattern[StreetPattern["Grid"] = 1] = "Grid";
+    StreetPattern[StreetPattern["Round"] = 2] = "Round";
+})(StreetPattern || (exports.StreetPattern = StreetPattern = {}));
 var StreetStatus;
 (function (StreetStatus) {
     StreetStatus[StreetStatus["Build"] = 0] = "Build";
@@ -693,12 +844,13 @@ class Point {
 }
 exports.Point = Point;
 class StreetNode {
+    // traffic: number;
     constructor(id, position, hierarchy) {
         this.id = id;
         this.position = position;
         this.hierarchy = hierarchy;
         this.isGrowthing = true;
-        this.traffic = 0;
+        // this.traffic = 0;
         this.hasFront = false;
         this.hasRight = false;
         this.hasLeft = false;
@@ -706,9 +858,9 @@ class StreetNode {
         this.leftDirection = new Point(0, 0);
         this.rightDirection = new Point(0, 0);
     }
-    setTraffic(traffic) {
-        this.traffic = traffic;
-    }
+    // setTraffic(traffic: number) {
+    //     this.traffic = traffic;
+    // }
     setDirection(directionVector) {
         this.direction = directionVector;
         this.direction.normalize();
@@ -748,23 +900,29 @@ class StreetEdge {
     }
 }
 exports.StreetEdge = StreetEdge;
+class PlanarGraph {
+}
 class Face {
-    constructor(nodes) {
+    constructor(boundaryNodes, boundaryStreets) {
+        this.nodes = [];
+        this.streets = [];
         this.traingles = [];
         this.trainglesSurface = [];
         this.totalSurface = 0;
-        const id = nodes.map(n => n.id).sort((id1, id2) => id1 - id2).join(':');
-        this.id = id;
-        this.path = nodes.map(n => n.id).join('_');
-        this.nodes = nodes;
-        const traingles = (0, earcut_1.default)(nodes.flatMap(node => [node.position.x, node.position.y]));
+        this.isExpansionFinished = false;
+        this.areaStreetPattern = StreetPattern.Normal;
+        this.id = boundaryNodes.map(n => n.id).sort((id1, id2) => id1 - id2).join(':');
+        this.boundaryNodes = boundaryNodes;
+        this.boundaryStreets = boundaryStreets;
+        this.nodes = [...boundaryNodes];
+        this.streets = [...boundaryStreets];
+        const traingles = (0, earcut_1.default)(boundaryNodes.flatMap(node => [node.position.x, node.position.y]));
         for (let i = 0; i < traingles.length; i += 3) {
-            const p1 = nodes[traingles[i]];
-            const p2 = nodes[traingles[i + 1]];
-            const p3 = nodes[traingles[i + 2]];
+            const p1 = boundaryNodes[traingles[i]];
+            const p2 = boundaryNodes[traingles[i + 1]];
+            const p3 = boundaryNodes[traingles[i + 2]];
             this.traingles.push([p1, p2, p3]);
         }
-        // [StreetNode, StreetNode, StreetNode]
         this.trainglesSurface = this.traingles.map(([p1, p2, p3]) => {
             const a = p1.position.distance(p2.position);
             const b = p1.position.distance(p3.position);
@@ -772,8 +930,18 @@ class Face {
             return 0.25 * Math.sqrt((a + b + c) * ((-1) * a + b + c) * ((-1) * b + a + c) * ((-1) * c + a + b)); // Heron's formula
         });
         this.totalSurface = this.trainglesSurface.reduce((a, b) => a + b, 0);
-        const randomColor = Math.floor(Math.random() * 128 + 128).toString(16);
-        this.color = "#00" + randomColor + "00";
+        const randomColor = Math.floor(Math.random() * 256 + 0).toString(16);
+        const randomColor2 = Math.floor(Math.random() * 256 + 0).toString(16);
+        this.color = "#00" + randomColor + randomColor2;
+    }
+    getRandomPointInTriangle(selectedTraingle) {
+        const r1 = Math.random();
+        const r2 = Math.random();
+        const sqrt_r1 = Math.sqrt(r1);
+        const A = selectedTraingle[0].position.scalarMultiply(1 - sqrt_r1);
+        const B = selectedTraingle[1].position.scalarMultiply(sqrt_r1 * (1 - r2));
+        const C = selectedTraingle[2].position.scalarMultiply(r2 * sqrt_r1);
+        return A.vectorAdd(B).vectorAdd(C);
     }
     getRandomPointFromFace() {
         // select random traingle from face weighted by surface
@@ -783,22 +951,44 @@ class Face {
         const selectedTraingle = this.traingles[traingleIndex];
         // find random point in the selected traingle
         // https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle-in-3d
-        const r1 = Math.random();
-        const r2 = Math.random();
-        const sqrt_r1 = Math.sqrt(r1);
-        const A = selectedTraingle[0].position.scalarMultiply(1 - sqrt_r1);
-        const B = selectedTraingle[1].position.scalarMultiply(sqrt_r1 * (1 - r2));
-        const C = selectedTraingle[2].position.scalarMultiply(r2 * sqrt_r1);
-        return A.vectorAdd(B).vectorAdd(C);
+        return this.getRandomPointInTriangle(selectedTraingle);
+    }
+    getRandomTwoPoinsInTraingle() {
+        // select random traingle from face weighted by surface
+        const normalizedSurfaceRations = (0, utils_1.normalizeNumbers)(this.trainglesSurface.map(surface => surface / this.totalSurface));
+        let traingleIndex = (0, utils_1.randomlySelectElementFromProbabilityDistribution)(normalizedSurfaceRations);
+        traingleIndex = traingleIndex == -1 ? 0 : traingleIndex;
+        const selectedTraingle = this.traingles[traingleIndex];
+        // find random  two points in the selected traingle
+        // https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle-in-3d
+        const p1 = this.getRandomPointInTriangle(selectedTraingle);
+        const p2 = this.getRandomPointInTriangle(selectedTraingle);
+        return [p1, p2];
+    }
+    addStreet(street) {
+        if (!this.streets.some(s => s.id == street.id)) {
+            this.streets.push(street);
+        }
+        ;
+        if (!this.boundaryNodes.some(n => n.id == street.startNode.id)) {
+            this.nodes.push(street.startNode);
+        }
+        ;
+        if (!this.boundaryNodes.some(n => n.id == street.endNode.id)) {
+            this.nodes.push(street.endNode);
+        }
+        ;
     }
 }
 exports.Face = Face;
 class StreetGraph {
+    getEdges() {
+        return Object.values(this.edges);
+    }
     constructor() {
         this.nodesIds = 100;
         this.trainglesToDraw = [];
         this.pointsToDraw = [];
-        this.edges = [];
         this.nodes = [];
         this.newPoints = [];
         this.graph = {};
@@ -807,7 +997,7 @@ class StreetGraph {
         this.valence4edges = 0;
         this.facesDict = {};
         this.clockwiseEdgesOrder = {};
-        this.edgesDict = {};
+        this.edges = {};
         this.facesList = [];
         this.canvansDrawingEngine = null;
     }
@@ -821,7 +1011,7 @@ class StreetGraph {
     addStreet(street) {
         const startNodeId = street.startNode.id;
         const endNodeId = street.endNode.id;
-        if (this.edgesDict[street.id]) {
+        if (this.edges[street.id]) {
             return;
         }
         if (!this.graph[startNodeId]) {
@@ -838,8 +1028,7 @@ class StreetGraph {
         }
         this.graph[startNodeId][endNodeId] = street;
         this.graph[endNodeId][startNodeId] = street;
-        this.edges.push(street);
-        this.edgesDict[street.id] = street;
+        this.edges[street.id] = street;
         // update clockwiseEdgesOrder
         if (!this.clockwiseEdgesOrder[startNodeId])
             this.clockwiseEdgesOrder[startNodeId] = [];
@@ -847,6 +1036,10 @@ class StreetGraph {
             this.clockwiseEdgesOrder[endNodeId] = [];
         this.updateCloskwiseEdgesOrder(startNodeId);
         this.updateCloskwiseEdgesOrder(endNodeId);
+    }
+    addMinorStreet(street, face) {
+        this.addStreet(street);
+        face.addStreet(street);
     }
     updateCloskwiseEdgesOrder(nodeId) {
         this.clockwiseEdgesOrder[nodeId] = Object.values(this.graph[nodeId]).sort((street1, street2) => {
@@ -861,12 +1054,7 @@ class StreetGraph {
         const endNodeId = street.endNode.id;
         delete this.graph[startNodeId][endNodeId];
         delete this.graph[endNodeId][startNodeId];
-        delete this.edgesDict[street.id];
-        const index = this.edges.findIndex(s => s.id == street.id);
-        let l = this.edges.length;
-        if (index > -1) {
-            this.edges.splice(index, 1);
-        }
+        delete this.edges[street.id];
         this.updateCloskwiseEdgesOrder(startNodeId);
         this.updateCloskwiseEdgesOrder(endNodeId);
     }
@@ -906,7 +1094,7 @@ class StreetGraph {
     calcualteFaces() {
         return __awaiter(this, void 0, void 0, function* () {
             this.facesList = [];
-            for (let edge of this.edges) {
+            for (let edge of this.getEdges()) {
                 let nextNode = edge.endNode;
                 let currEdge = edge;
                 const path = [edge];
@@ -917,7 +1105,7 @@ class StreetGraph {
                     const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
                     if (!nextEdgeId)
                         break;
-                    currEdge = this.edgesDict[nextEdgeId];
+                    currEdge = this.edges[nextEdgeId];
                     // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
                     // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
                     nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
@@ -927,7 +1115,7 @@ class StreetGraph {
                     path.push(currEdge);
                     // cycle found
                     if (nextNode.id == edge.startNode.id) {
-                        const face = new Face(pathNodes);
+                        const face = new Face(pathNodes, path);
                         if (!this.facesDict[face.id]) {
                             this.facesDict[face.id] = face;
                             this.facesList.push(face);
@@ -937,7 +1125,7 @@ class StreetGraph {
                     }
                 }
             }
-            // for (let edge of this.edges) {
+            // for (let edge of this.getEdges()) {
             //     // await this.wait(100);
             //     let nextNode = edge.endNode;
             //     let currEdge = edge;
@@ -947,7 +1135,7 @@ class StreetGraph {
             //     while (true) {
             //         const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
             //         if (!nextEdgeId) break;
-            //         currEdge = this.edgesDict[nextEdgeId];
+            //         currEdge = this.edges[nextEdgeId];
             //         // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
             //         // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
             //         nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
@@ -972,7 +1160,7 @@ class StreetGraph {
     calcualteFace(edgeId) {
         var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function* () {
-            const edge = this.edgesDict[edgeId];
+            const edge = this.edges[edgeId];
             if (!edge)
                 return;
             let nextNode = edge.endNode;
@@ -985,14 +1173,14 @@ class StreetGraph {
                 const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
                 if (!nextEdgeId)
                     break;
-                currEdge = this.edgesDict[nextEdgeId];
+                currEdge = this.edges[nextEdgeId];
                 const randomColor = Math.floor(Math.random() * 16777215).toString(16);
                 (_b = this.canvansDrawingEngine) === null || _b === void 0 ? void 0 : _b.drawEdge(currEdge, "#" + randomColor);
                 nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
                 pathNodes.push(nextNode);
                 path.push(currEdge);
                 if (nextNode.id == edge.startNode.id) {
-                    const face = new Face(pathNodes);
+                    const face = new Face(pathNodes, path);
                     this.facesList.push(face);
                     if (!this.facesDict[face.id])
                         this.facesDict[face.id] = face;
@@ -1005,14 +1193,14 @@ class StreetGraph {
                 const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
                 if (!nextEdgeId)
                     break;
-                currEdge = this.edgesDict[nextEdgeId];
+                currEdge = this.edges[nextEdgeId];
                 const randomColor = Math.floor(Math.random() * 16777215).toString(16);
                 (_d = this.canvansDrawingEngine) === null || _d === void 0 ? void 0 : _d.drawEdge(currEdge, "#" + randomColor);
                 nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
                 pathNodes.push(nextNode);
                 path.push(currEdge);
                 if (nextNode.id == edge.startNode.id) {
-                    const face = new Face(pathNodes);
+                    const face = new Face(pathNodes, path);
                     this.facesList.push(face);
                     if (!this.facesDict[face.id])
                         this.facesDict[face.id] = face;

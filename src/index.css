@@ -1,0 +1,21 @@
+#content_container {
+    display: flex;
+}
+
+#canvas {
+    border: 1px solid black;
+}
+
+.section {
+    margin-bottom: 20px;
+}
+
+.colorBox {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+}
+
+.inlineButton {
+    display: inline-block;
+}
