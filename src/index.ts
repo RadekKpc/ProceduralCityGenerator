@@ -46,7 +46,12 @@ const init = () => {
     const clearfaces = document.getElementById("clearfaces");
     if (clearfaces) clearfaces.onclick = () => {
         if (currentStreetGraph) currentStreetGraph.facesList = [];
+        if (currentStreetGraph) currentStreetGraph.facesDict = {};
+    }
 
+    const splitFaces = document.getElementById("splitFaces");
+    if (splitFaces) splitFaces.onclick = () => {
+        if(currentStreetGraph) cityGenerator.splitFaces();
     }
 
     // start stop simulation

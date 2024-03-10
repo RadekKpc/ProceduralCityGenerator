@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/RadekKpc/ProceduralCityGenerator#readme",
   "devDependencies": {
+    "@types/earcut": "^2.1.4",
     "@types/node": "^20.11.20",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "browserify": "^17.0.0",
+    "earcut": "^2.2.4",
     "watchify": "^4.0.0"
   }
 }

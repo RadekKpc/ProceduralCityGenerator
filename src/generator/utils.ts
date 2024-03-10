@@ -44,3 +44,16 @@ export const calculateIntersection = (p1: Point, p2: Point, p3: Point, p4: Point
 
     return new Point(px, py);
 }
+
+export const normalizeNumbers = (numbers: number[]): number[] => {
+    const sum = numbers.reduce((a, b) => a + b, 0);
+    return numbers.map(n => n / sum);
+}
+
+export const randomlySelectElementFromProbabilityDistribution = (distribution: number[]) => {
+    for (let i = 1; i < distribution.length; i++) {
+        distribution[i] += distribution[i - 1];
+    }
+    const randomNumber = Math.random();
+    return distribution.findIndex(e => e >= randomNumber);
+}

@@ -1,10 +1,10 @@
 import { CanvasDrawingEngine } from '../drawingEngine/CanvasDrawingEngine';
 import { ISimulationConfiguration } from '../simulationConfiguration';
-import { Hierarchy, Point, StreetEdge, StreetGraph, StreetNode, StreetStatus } from '../types/StreetGraph';
+import { Face, Hierarchy, Point, StreetEdge, StreetGraph, StreetNode, StreetStatus } from '../types/StreetGraph';
 import { GridStreetsPattern } from './cityStyles/GridStreetsPattern';
 import { NormalStreetsPattern } from './cityStyles/NormalStreetsPattern';
-import { calculateIntersection } from './utils';
-
+import { calculateIntersection, normalizeNumbers, randomlySelectElementFromProbabilityDistribution } from './utils';
+import earcut from 'earcut';
 export class CityGenerator implements Iterator<StreetGraph> {
 
     numberOfStreets: number;
@@ -26,19 +26,6 @@ export class CityGenerator implements Iterator<StreetGraph> {
 
     calucateGrowthCandidateProbablity(node: StreetNode): number {
         return Math.pow(Math.E, (-1) * Math.pow(this.configuration.focusedGrowthFunc(this.getDistanceFromClosesGrowthPoint(node.position)), 2));
-    }
-
-    normalizeNumbers(numbers: number[]): number[] {
-        const sum = numbers.reduce((a, b) => a + b, 0);
-        return numbers.map(n => n / sum);
-    }
-
-    randomlySelectElementFromProbabilityDistribution(distribution: number[]) {
-        for (let i = 1; i < distribution.length; i++) {
-            distribution[i] += distribution[i - 1];
-        }
-        const randomNumber = Math.random();
-        return distribution.findIndex(e => e >= randomNumber);
     }
 
     scanAround(scanPosition: Point) {
@@ -154,8 +141,6 @@ export class CityGenerator implements Iterator<StreetGraph> {
             return this.generateNewStreet(node.leftDirection, null, node);
         }
 
-        console.log("nothing generated");
-
         return {
             newStreets: [],
             streetsToRemove: []
@@ -169,7 +154,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
 
         console.log('current2to4ration', current2to4ration)
         if (current2to4ration < this.configuration.valence2to3or4Ratio) {
-            return [[1], [2,3]];
+            return [[1], [2, 3]];
         }
         return [[2, 3], [1]];
         // check distribution again (for 4 valance nodes)
@@ -178,6 +163,39 @@ export class CityGenerator implements Iterator<StreetGraph> {
         // if (valenceDistributon['3'] / allNodes < this.configuration.valenceRatio[1]) return 2;
         // return 3;
     }
+
+    nextFace: number = 0;
+    splitNextFace() {
+        this.streetGraph.pointsToDraw = [];
+        this.streetGraph.trainglesToDraw = [];
+        const face = this.streetGraph.facesList[this.nextFace % this.streetGraph.facesList.length];
+        for (let i = 0; i < 10; i++) {
+            const point = face.getRandomPointFromFace();
+            this.streetGraph.pointsToDraw.push(point);
+        }
+        this.fillDistinctWithSecondaryRoads(face)
+        this.nextFace += 1;
+    }
+
+    splitFaces() {
+        for (let face of this.streetGraph.facesList) {
+            this.fillDistinctWithSecondaryRoads(face);
+            for (let i = 0; i < 10; i++) {
+                const point = face.getRandomPointFromFace();
+                this.streetGraph.pointsToDraw.push(point);
+            }
+        }
+    }
+
+    fillDistinctWithSecondaryRoads(face: Face) {
+        const traingles = face.traingles;
+
+        for (let traingle of traingles) {
+            this.streetGraph.trainglesToDraw.push(traingle);
+        }
+
+    }
+
 
     next(): IteratorResult<StreetGraph, any> {
         this.currentTime += 1;
@@ -190,10 +208,10 @@ export class CityGenerator implements Iterator<StreetGraph> {
         }
 
         const candidatesProbabilites = growthCandidates.map(candidate => this.calucateGrowthCandidateProbablity(candidate));
-        const normalizedCandidatesProbabilities = this.normalizeNumbers(candidatesProbabilites);
+        const normalizedCandidatesProbabilities = normalizeNumbers(candidatesProbabilites);
         // console.log('normalizedCandidatesProbabilities', normalizedCandidatesProbabilities)
         // console.log(normalizedCandidatesProbabilities.reduce((a, b) => a + b, 0))
-        const randomNodeIndex = this.randomlySelectElementFromProbabilityDistribution(normalizedCandidatesProbabilities);
+        const randomNodeIndex = randomlySelectElementFromProbabilityDistribution(normalizedCandidatesProbabilities);
 
         if (randomNodeIndex == -1) {
             // console.log("coud not find candidate");

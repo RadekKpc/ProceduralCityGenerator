@@ -1,4 +1,6 @@
 import { CanvasDrawingEngine } from "../drawingEngine/CanvasDrawingEngine";
+import earcut from 'earcut';
+import { normalizeNumbers, randomlySelectElementFromProbabilityDistribution } from "../generator/utils";
 
 export enum Hierarchy {
     Minor,
@@ -172,12 +174,60 @@ export class StreetEdge {
 
 export class Face {
     id: string;
+    path: string;
     nodes: StreetNode[];
+    color: string;
+    traingles: [StreetNode, StreetNode, StreetNode][] = [];
+    trainglesSurface: number[] = [];
+    totalSurface: number = 0;
+
 
     constructor(nodes: StreetNode[]) {
         const id = nodes.map(n => n.id).sort((id1, id2) => id1 - id2).join(':');
         this.id = id;
+        this.path = nodes.map(n => n.id).join('_');
         this.nodes = nodes;
+
+        const traingles = earcut(nodes.flatMap(node => [node.position.x, node.position.y]));
+
+        for (let i = 0; i < traingles.length; i += 3) {
+            const p1 = nodes[traingles[i]];
+            const p2 = nodes[traingles[i + 1]];
+            const p3 = nodes[traingles[i + 2]];
+            this.traingles.push([p1, p2, p3]);
+        }
+        // [StreetNode, StreetNode, StreetNode]
+        this.trainglesSurface = this.traingles.map(([p1, p2, p3]: [StreetNode, StreetNode, StreetNode]) => {
+            const a = p1.position.distance(p2.position);
+            const b = p1.position.distance(p3.position);
+            const c = p2.position.distance(p3.position);
+            return 0.25 * Math.sqrt((a + b + c) * ((-1) * a + b + c) * ((-1) * b + a + c) * ((-1) * c + a + b)); // Heron's formula
+        });
+
+        this.totalSurface = this.trainglesSurface.reduce((a, b) => a + b, 0);
+
+        const randomColor = Math.floor(Math.random() * 128 + 128).toString(16);
+        this.color = "#00" + randomColor + "00";
+    }
+
+    getRandomPointFromFace(): Point {
+        // select random traingle from face weighted by surface
+        const normalizedSurfaceRations = normalizeNumbers(this.trainglesSurface.map(surface => surface / this.totalSurface));
+        let traingleIndex = randomlySelectElementFromProbabilityDistribution(normalizedSurfaceRations);
+        traingleIndex = traingleIndex == -1 ? 0 : traingleIndex;
+        const selectedTraingle = this.traingles[traingleIndex]
+
+        // find random point in the selected traingle
+        // https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle-in-3d
+        const r1 = Math.random();
+        const r2 = Math.random();
+        const sqrt_r1 = Math.sqrt(r1);
+
+        const A = selectedTraingle[0].position.scalarMultiply(1 - sqrt_r1);
+        const B = selectedTraingle[1].position.scalarMultiply(sqrt_r1 * (1 - r2));
+        const C = selectedTraingle[2].position.scalarMultiply(r2 * sqrt_r1);
+
+        return A.vectorAdd(B).vectorAdd(C);
     }
 }
 
@@ -201,6 +251,8 @@ export class StreetGraph {
 
     nodesIds: number = 100;
     canvansDrawingEngine: CanvasDrawingEngine | null;
+    trainglesToDraw: StreetNode[][] = [];
+    pointsToDraw: Point[] = [];
 
     constructor() {
         this.edges = [];
@@ -345,6 +397,8 @@ export class StreetGraph {
 
             while (true) {
 
+                // await this.wait(100);
+
                 const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
                 if (!nextEdgeId) break;
 
@@ -354,14 +408,20 @@ export class StreetGraph {
 
                 nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
 
-                pathNodes.push(nextNode);
-                path.push(currEdge);
+                if (nextNode.id != edge.startNode.id) {
+                    pathNodes.push(nextNode);
+                }
 
+                path.push(currEdge);
                 // cycle found
                 if (nextNode.id == edge.startNode.id) {
                     const face = new Face(pathNodes);
-                    this.facesList.push(face);
-                    if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
+
+                    if (!this.facesDict[face.id]) {
+                        this.facesDict[face.id] = face;
+                        this.facesList.push(face);
+                    }
+
                     // this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
                     break;
                 }
@@ -369,42 +429,47 @@ export class StreetGraph {
 
         }
 
-        for (let edge of this.edges) {
-            // if (visitedEdges.has(edge.id)) continue;
+        // for (let edge of this.edges) {
 
-            let nextNode = edge.endNode;
-            let currEdge = edge;
+        //     // await this.wait(100);
+        //     let nextNode = edge.endNode;
+        //     let currEdge = edge;
 
-            const path = [edge];
-            const pathNodes = [edge.startNode, edge.endNode];
+        //     const path = [edge];
+        //     const pathNodes = [edge.startNode, edge.endNode];
 
-            // this.canvansDrawingEngine?.drawEdge(edge, "blue");
+        //     // this.canvansDrawingEngine?.drawEdge(edge, "blue");
 
-            while (true) {
+        //     while (true) {
 
-                const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
-                if (!nextEdgeId) break;
+        //         const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
+        //         if (!nextEdgeId) break;
 
-                currEdge = this.edgesDict[nextEdgeId];
-                // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
-                // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+        //         currEdge = this.edgesDict[nextEdgeId];
+        //         // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+        //         // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
 
-                nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+        //         nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
 
-                pathNodes.push(nextNode);
-                path.push(currEdge);
+        //         if (nextNode.id != edge.startNode.id) {
+        //             pathNodes.push(nextNode);
+        //         }
 
-                // cycle found
-                if (nextNode.id == edge.startNode.id) {
-                    const face = new Face(pathNodes);
-                    this.facesList.push(face);
-                    if (!this.facesDict[face.id]) this.facesDict[face.id] = face;
-                    // this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
-                    break;
-                }
-            }
+        //         path.push(currEdge);
 
-        }
+        //         // cycle found
+        //         if (nextNode.id == edge.startNode.id) {
+        //             const face = new Face(pathNodes);
+        //             if (!this.facesDict[face.id]) {
+        //                 this.facesDict[face.id] = face;
+        //                 this.facesList.push(face);
+        //             }
+        //             // this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+        //             break;
+        //         }
+        //     }
+
+        // }
     }
 
     async calcualteFace(edgeId: string) {

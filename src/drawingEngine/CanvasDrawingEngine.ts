@@ -80,18 +80,43 @@ export class CanvasDrawingEngine implements IDrawingEngine {
             this.context.fillRect(this.getX(growthPoint.x), this.getY(growthPoint.y), 10, 10);
         }
 
-        this.context.fillStyle = "green";
 
+        console.log(streetGraph.facesList)
         for (let face of streetGraph.facesList) {
+
             this.context.beginPath();
             this.context.moveTo(this.getX(face.nodes[0].position.x), this.getY(face.nodes[0].position.y));
             for (let node of face.nodes) {
                 this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
             }
             this.context.closePath();
+
+            this.context.fillStyle = face.color;
             this.context.fill();
         }
 
+        // trainglesToDraw
+        for (const traingle of streetGraph.trainglesToDraw) {
+
+            this.context.beginPath();
+            this.context.moveTo(this.getX(traingle[0].position.x), this.getY(traingle[0].position.y));
+            for (let node of traingle) {
+                this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+            }
+            this.context.closePath();
+
+            const randomColor = Math.floor(Math.random() * 128 + 128).toString(16);
+            this.context.fillStyle = "#0000" + randomColor;
+            this.context.fill();
+        }
+
+        // point to draw
+
+        for (let ponint of streetGraph.pointsToDraw) {
+            const randomColor = Math.floor(Math.random() * 128 + 128).toString(16);
+            this.context.fillStyle = "#" + randomColor + '0000';
+            this.context.fillRect(this.getX(ponint.x), this.getY(ponint.y), 5, 5);
+        }
     }
 
     fillCircle(path: StreetNode[], color: string) {
