@@ -1,19 +1,34 @@
 import { Hierarchy, Point, StreetEdge, StreetGraph, StreetNode, StreetStatus } from "./types/StreetGraph";
 
-export interface ISimulationConfiguration {
-    initialStreetGraph: StreetGraph,
-    cityCenterPoint: Point,
-    numberOfYears: number,
-    timeStep: number,
-    valence2to3or4Ratio: number, // should sum to 1, node with valence 2, 3, 4 respectivelly
+export interface IExpansionConfiguraiton {
+    minSteetSegmentLength: number,
     streetsLength: number,
     generationAngle: number,
     futureIntersectionScanFactor: number,
     nodeCricusScanningR: number,
+}
+
+export interface ISimulationConfiguration {
+    // initial parameters
+    initialStreetGraph: StreetGraph,
+    cityCenterPoint: Point,
     growthPoints: Point[],
-    focusedGrowthFunc: (distanceFromNearestGrothwCeter: number) => number
-    minSteetSegmentLength: number,
+
+    // simulation
+    numberOfYears: number,
+    timeStep: number,
+
+    // major nodes generation
+    valence2to3or4Ratio: number, // should sum to 1, node with valence 2, 3, 4 respectivelly
+    focusedGrowthFunc: (distanceFromNearestGrothwCeter: number) => number,
+    majorNodesGeneration: IExpansionConfiguraiton,
+
+    // minor nodes generation
     minimumInitialStreetLength: number
+    minorNodesGeneration: IExpansionConfiguraiton,
+
+    // lots subdivision
+    maximuLotSurface: number
 
 }
 
@@ -67,21 +82,34 @@ const SimulationConfiguration: ISimulationConfiguration = {
     cityCenterPoint: new Point(400, 400),
     growthPoints: [new Point(0, 0)],
     // growthPoints: [new Point(-400, -400), new Point(400, 400), new Point(1000, 1500)],
-    focusedGrowthFunc: (distanceFromNearestGrothwCeter: number) => 0.01 * distanceFromNearestGrothwCeter,
+
     // simulation
     numberOfYears: 10000000,
     timeStep: 1,
-    // new nodes generation
-    minSteetSegmentLength: 0,
-    generationAngle: Math.PI / 2,
-    streetsLength: 50,
-    futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
-    nodeCricusScanningR: 0, // causes minor streets to go out of face (if another node is found)
-    // streets
-    valence2to3or4Ratio: 0.99,
 
-    // secondary roads
-    minimumInitialStreetLength: 10
+    // major nodes generation
+    valence2to3or4Ratio: 0.99,
+    focusedGrowthFunc: (distanceFromNearestGrothwCeter: number) => 0.01 * distanceFromNearestGrothwCeter,
+    majorNodesGeneration: {
+        generationAngle: Math.PI / 2,
+        minSteetSegmentLength: 0,
+        streetsLength: 50,
+        futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
+        nodeCricusScanningR: 0, // can cause crossing? cuses not finding faces?!! check that
+    },
+
+    // minor nodes generation
+    minimumInitialStreetLength: 10,
+    minorNodesGeneration: {
+        generationAngle: Math.PI / 2,
+        minSteetSegmentLength: 0,
+        streetsLength: 20,
+        futureIntersectionScanFactor: 1.5, // length for node to check future interseciton
+        nodeCricusScanningR: 0, // causes minor streets to go out of face (if another node is found)
+    },
+
+    // lots subdivision
+    maximuLotSurface: 400
 }
 
 export default SimulationConfiguration; 

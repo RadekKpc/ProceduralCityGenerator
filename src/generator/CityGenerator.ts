@@ -1,7 +1,13 @@
-import { ISimulationConfiguration } from '../simulationConfiguration';
+import { IExpansionConfiguraiton, ISimulationConfiguration } from '../simulationConfiguration';
 import { Face, Hierarchy, Point, StreetEdge, StreetGraph, StreetNode, StreetStatus } from '../types/StreetGraph';
 import { NormalStreetsPattern } from './cityStyles/NormalStreetsPattern';
 import { calculateIntersection, normalizeNumbers, randomlySelectElementFromProbabilityDistribution } from './utils';
+
+export type GenerateStreetResult =
+    { newStreets: [], streetsToRemove: [] } | // nothing generated
+    { newStreets: [StreetEdge], streetsToRemove: [] } | // new street generated
+    { newStreets: [StreetEdge, StreetEdge, StreetEdge], streetsToRemove: [StreetEdge] } // street cut
+
 export class CityGenerator implements Iterator<StreetGraph> {
 
     numberOfStreets: number;
@@ -27,19 +33,21 @@ export class CityGenerator implements Iterator<StreetGraph> {
     }
 
 
-    scanAround(scanPosition: Point) {
+    scanAround(scanPosition: Point, configuration: IExpansionConfiguraiton) {
         for (let node of this.streetGraph.nodes) {
-            if (node.position.distance(scanPosition) < this.configuration.nodeCricusScanningR) {
+            if (node.position.distance(scanPosition) < configuration.nodeCricusScanningR) {
                 return node;
             }
         }
         return null;
     }
 
-    generateNewStreet(direction: Point, startNode: StreetNode) {
-        const [newNodePosition, futureIntersectionScanPosition] = new NormalStreetsPattern().getNewNodeLocation(direction, startNode, this.configuration);
+    generateNewStreet(direction: Point, startNode: StreetNode): GenerateStreetResult {
+        const isMajorNode = startNode.hierarchy == Hierarchy.Major;
+        const expansionConfig = isMajorNode ? this.configuration.majorNodesGeneration : this.configuration.minorNodesGeneration;
+        const [newNodePosition, futureIntersectionScanPosition] = new NormalStreetsPattern().getNewNodeLocation(direction, startNode, expansionConfig);
         const newNode = new StreetNode(this.streetGraph.getNextNodeId(), newNodePosition, startNode.hierarchy);
-        const newStreet = new StreetEdge(startNode, newNode, startNode.hierarchy, startNode.hierarchy == Hierarchy.Major ? 3 : 1, StreetStatus.Build);
+        const newStreet = new StreetEdge(startNode, newNode, startNode.hierarchy, isMajorNode ? 3 : 2, StreetStatus.Build);
 
         // check for intersection or future intersection
         let closestInetrsectionPoint: Point | null = null;
@@ -61,11 +69,11 @@ export class CityGenerator implements Iterator<StreetGraph> {
 
         if (closestInetrsectionPoint && intersectionStreet) {
             // if intersection is close ot existing point we do not need cut edge
-            const nodeInCircle = this.scanAround(closestInetrsectionPoint);
+            const nodeInCircle = this.scanAround(closestInetrsectionPoint, expansionConfig);
             if (nodeInCircle) {
                 newStreet.setEndNode(nodeInCircle)
 
-                if (newStreet.length() < this.configuration.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
+                if (newStreet.length() < expansionConfig.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
 
                 return {
                     newStreets: [newStreet],
@@ -79,9 +87,9 @@ export class CityGenerator implements Iterator<StreetGraph> {
             // they should inherit all proeprties
             const part1Street = new StreetEdge(intersectionStreet.startNode, newNode, intersectionStreet.hierarchy, intersectionStreet.width, intersectionStreet.status);
             const part2Street = new StreetEdge(intersectionStreet.endNode, newNode, intersectionStreet.hierarchy, intersectionStreet.width, intersectionStreet.status);
-            const newStreet2 = new StreetEdge(startNode, newNode, startNode.hierarchy, startNode.hierarchy == Hierarchy.Major ? 3 : 1, StreetStatus.Build);
+            const newStreet2 = new StreetEdge(startNode, newNode, startNode.hierarchy, isMajorNode ? 3 : 2, StreetStatus.Build);
 
-            if (newStreet2.length() < this.configuration.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
+            if (newStreet2.length() < expansionConfig.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
 
             return {
                 newStreets: [part1Street, part2Street, newStreet2],
@@ -92,11 +100,11 @@ export class CityGenerator implements Iterator<StreetGraph> {
 
 
         // check for existing nodes in circle
-        const nodeInCircle = this.scanAround(newNode.position);
+        const nodeInCircle = this.scanAround(newNode.position, expansionConfig);
         if (nodeInCircle) {
             newStreet.setEndNode(nodeInCircle);
 
-            if (newStreet.length() < this.configuration.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
+            if (newStreet.length() < expansionConfig.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
 
             return {
                 newStreets: [newStreet],
@@ -104,7 +112,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
             }
         }
 
-        if (newStreet.length() < this.configuration.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
+        if (newStreet.length() < expansionConfig.minSteetSegmentLength) return { newStreets: [], streetsToRemove: [] };
 
         return {
             newStreets: [newStreet],
@@ -113,7 +121,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
 
     }
 
-    expandNode(node: StreetNode) {
+    expandNode(node: StreetNode): GenerateStreetResult {
         const nodeValence = this.streetGraph.getNodeValence(node);
 
         if (nodeValence == 1) {
@@ -164,6 +172,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
         // return 3;
     }
 
+    //tmp
     nextFace: number = 0;
     splitNextFace() {
         this.streetGraph.pointsToDraw = [];
@@ -179,6 +188,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
         this.nextFace += 1;
     }
 
+    //tmp
     splitFaces() {
         for (let face of this.streetGraph.facesList) {
             for (let traingle of face.traingles) {
@@ -200,11 +210,16 @@ export class CityGenerator implements Iterator<StreetGraph> {
 
     expandMinorStreets() {
         for (let face of this.streetGraph.facesList) {
-            for (let i = 0; i < 30; i++) {
-                this.expandMinorStreet(face);
-            }
+            let expansionPossible;
+            let i = 0;
+            do {
+                expansionPossible = this.expandMinorStreet(face);
+                i++;
+            } while ( /* !face.isExpansionFinished */ expansionPossible && i < 500); // need to be optimized, check if face is not too big (area)
+            face.isExpansionFinished = true;
         }
     }
+
     fillFaceWithRoads(face: Face) {
 
         let isProperLength = false;
@@ -214,7 +229,7 @@ export class CityGenerator implements Iterator<StreetGraph> {
             const [startPoint1, startPoint2] = face.getRandomTwoPoinsInTraingle();
             const node1 = new StreetNode(this.streetGraph.getNextNodeId(), startPoint1, Hierarchy.Minor);
             const node2 = new StreetNode(this.streetGraph.getNextNodeId(), startPoint2, Hierarchy.Minor);
-            newEdge = new StreetEdge(node1, node2, Hierarchy.Minor, 1, StreetStatus.Planned);
+            newEdge = new StreetEdge(node1, node2, Hierarchy.Minor, 2, StreetStatus.Planned);
             if (newEdge.length() >= this.configuration.minimumInitialStreetLength) {
                 isProperLength = true;
                 break;
@@ -222,18 +237,37 @@ export class CityGenerator implements Iterator<StreetGraph> {
         }
 
         if (!isProperLength || !newEdge) {
-            console.log('could not find proper new street for face')
+            // console.log('could not find proper new street for face')
             return;
         }
 
+        console.log('1')
         this.streetGraph.addMinorStreet(newEdge, face);
 
-        // while(!face.isExpansionFinished) {
+        // let expansionPossible;
+        // do {
+        //     expansionPossible = this.expandMinorStreet(face);
+        // } while ( /* !face.isExpansionFinished */ expansionPossible);
 
-        // }
-        // for (let i = 0; i < 30; i++) {
-        //     this.expandMinorStreet(face);
-        // }
+    }
+
+    extractFacesFromGraph() {
+        this.streetGraph.calculateFaces();
+    }
+
+    extractBlocksFromFace() {
+        this.streetGraph.extractBlocksFromFaces();
+    }
+
+    //tmp
+    nextFace2: number = 0;
+    extractBlocksFromNextFace() {
+        this.streetGraph.extractBlockFromFace(this.nextFace2);
+        this.nextFace2 += 1;
+    }
+
+    splitBlockOnLots() {
+
     }
 
     expandMinorStreet(face: Face) {
@@ -243,31 +277,31 @@ export class CityGenerator implements Iterator<StreetGraph> {
         const normalizedCandidatesProbabilities = normalizeNumbers(candidatesProbabilites);
         const randomNodeIndex = randomlySelectElementFromProbabilityDistribution(normalizedCandidatesProbabilities);
 
-        if (randomNodeIndex == -1) {
-            // console.log("coud not find candidate");
-            return {
-                done: this.currentTime == this.configuration.numberOfYears,
-                value: this.streetGraph
-            };
-        }
+        if (randomNodeIndex == -1) return false;
 
         const randomNode = growthCandidates[randomNodeIndex];
 
         const expansionResult = this.expandNode(randomNode);
 
-        // console.log('expansionResult', expansionResult)
+        if (expansionResult.newStreets.length == 0 && expansionResult.streetsToRemove.length == 0) return false;
+
         this.streetGraph.clearNewPoints();
 
-        for (let newStreet of expansionResult.newStreets) {
-            this.streetGraph.addMinorStreet(newStreet, face); // check it twice
+        // new street case
+        if (expansionResult.newStreets.length == 1) {
+            const newStreet = expansionResult.newStreets[0];
+            this.streetGraph.addMinorStreet(newStreet, face);
             // below 2 lines are tmp
             this.streetGraph.addNewPoint(newStreet.endNode.position);
             this.streetGraph.addNewPoint(newStreet.startNode.position);
         }
 
-        for (let streetToRemove of expansionResult.streetsToRemove) {
-            this.streetGraph.removeStreet(streetToRemove); // to be done
+        // replace street case
+        if (expansionResult.newStreets.length == 3 && expansionResult.streetsToRemove.length == 1) {
+            this.streetGraph.replaceStreet(expansionResult.streetsToRemove[0], expansionResult.newStreets); // to be repalced with "splitStreet"
         }
+
+        return true;
     }
 
 
@@ -304,16 +338,18 @@ export class CityGenerator implements Iterator<StreetGraph> {
         // console.log('expansionResult', expansionResult)
         this.streetGraph.clearNewPoints();
 
-
-        for (let newStreet of expansionResult.newStreets) {
-            this.streetGraph.addStreet(newStreet); // check it twice
+        // new street case
+        if (expansionResult.newStreets.length == 1) {
+            const newStreet = expansionResult.newStreets[0];
+            this.streetGraph.addStreet(newStreet);
             // below 2 lines are tmp
             this.streetGraph.addNewPoint(newStreet.endNode.position);
             this.streetGraph.addNewPoint(newStreet.startNode.position);
         }
 
-        for (let streetToRemove of expansionResult.streetsToRemove) {
-            this.streetGraph.removeStreet(streetToRemove); // check it twice
+        // replace street case
+        if (expansionResult.newStreets.length == 3 && expansionResult.streetsToRemove.length == 1) {
+            this.streetGraph.replaceStreet(expansionResult.streetsToRemove[0], expansionResult.newStreets); // to be repalced with "splitStreet"
         }
 
         return {

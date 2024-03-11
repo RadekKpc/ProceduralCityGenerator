@@ -11,12 +11,12 @@
     <div id="content_container">
         <canvas id="canvas" width="1500" height="1000" style="cursor: pointer;"></canvas>
         <div>
+            <div class="section">
+                Scroll - zoom <br />
+                Double click - scan area around mouse to highlite face/block (logs in console)
+            </div>
             View configuration
             <div class="section">
-                <div>
-                    <input type="checkbox" id="fillFaces" checked />
-                    Fill faces
-                </div>
                 <div>
                     <input type="checkbox" id="drawMajorNodes" checked />
                     Major nodes <div class="colorBox" style="background-color: red;"></div>
@@ -26,17 +26,26 @@
                     Minor nodes <div class="colorBox" style="background-color: blue;"></div>
                 </div>
                 <div>
-                    <input type="checkbox" id="showNewNodes"/>
+                    <input type="checkbox" id="showNewNodes" />
                     New nodes <div class="colorBox" style="background-color: green;"></div>
                 </div>
                 <div>
-                    <input type="checkbox" id="showGrowthCenters"/>
+                    <input type="checkbox" id="showGrowthCenters" />
                     Growth centers
                     <div class="colorBox" style="background-color: orange;"></div>
                 </div>
                 <div>
+                    <input type="checkbox" id="fillFaces" checked />
+                    Fill faces
+                </div>
+                <div>
+                    <input type="checkbox" id="fillBlocks" checked />
+                    Fill blocks
+                </div>
+                <div>
                     <button id="centerView" class="centerView">center veiw</button>
                 </div>
+
             </div>
 
             Simulation control
@@ -49,16 +58,22 @@
             Simulation actions
             <div class="section">
                 <div>
-                    <button id="calcualteFaces">calculateFaces</button>
-                </div>
-                <div>
-                    <button id="splitFaces">splitFaces</button>
+                    <button id="calculateFaces">calculateFaces</button>
                 </div>
                 <div>
                     <button id="generateSecondaryRoads">generateSecondaryRoads</button>
                 </div>
                 <div>
                     <button id="expandMinorStreets">expandMinorStreets</button>
+                </div>
+                <div>
+                    <button id="calculateBlocks">calculateBlocks</button>
+                </div>
+                <div>
+                    <button id="calculateNextBlock">calculateNextBlock</button>
+                </div>
+                <div>
+                    <button id="splitFaces">splitFaces</button>
                 </div>
             </div>
 
@@ -73,13 +88,24 @@
                 <div>
                     <label for="name">Edge id</label>
                     <input type="text" id="edgeId" name="edgeId" size="10" />
-                    <button id="printEdgeinfo">print edge info</buttonf>
+                    <button id="printEdgeinfo">print edge info</button>
                 </div>
 
                 <div>
                     <label for="name">Edge id</label>
                     <input type="text" id="edgeId2" name="edgeId2" size="10" />
-                    <button id="cycleFound">start cycle founding algorithm</buttonf>
+                    <button id="cycleFound">start cycle founding algorithm</button>
+                    <button id="blockFoundEdge">start block founding algorithm</button>
+                </div>
+
+                <div>
+                    <label for="name">Face id</label>
+                    <input type="text" id="face" name="face" size="10" />
+                    <label for="delay">Delay</label>
+                    <input type="number" id="delay" name="delay" size="10" />
+                    <br />
+                    <button id="printFaceInfo">print face info</button>
+                    <button id="runBlocksAlgo">run blocks search for face</button>
                 </div>
             </div>
         </div>

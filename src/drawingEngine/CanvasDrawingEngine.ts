@@ -1,5 +1,5 @@
 import { ISimulationConfiguration } from "../simulationConfiguration";
-import { Hierarchy, StreetEdge, StreetGraph, StreetNode } from "../types/StreetGraph";
+import { Face, Hierarchy, StreetEdge, StreetGraph, StreetNode } from "../types/StreetGraph";
 import { DrawingConfiguration, IDrawingEngine } from "./IDrawingEngine";
 
 export class CanvasDrawingEngine implements IDrawingEngine {
@@ -72,6 +72,14 @@ export class CanvasDrawingEngine implements IDrawingEngine {
         return (position * (-1) * this.scale + this.offsetY + this.userOffsetY + this.tmpUserOffsetY);
     }
 
+    pixelToPositionX(pixelPosition: number) {
+        return (pixelPosition - (this.offsetX + this.userOffsetX + this.tmpUserOffsetX)) / this.scale;
+    }
+
+    pixelToPositionY(pixelPosition: number) {
+        return (pixelPosition - (this.offsetY + this.userOffsetY + this.tmpUserOffsetY)) / ((-1) * this.scale);
+    }
+
     changeDrawingConiguration(drawingConfiguration: Partial<DrawingConfiguration>) {
         this.drawingConfiguration = { ...this.drawingConfiguration, ...drawingConfiguration, };
     }
@@ -99,6 +107,20 @@ export class CanvasDrawingEngine implements IDrawingEngine {
             }
         }
 
+        if (this.drawingConfiguration.fillBlocks) {
+            for (let block of streetGraph.blocksList) {
+
+                this.context.beginPath();
+                this.context.moveTo(this.getX(block.boundaryNodes[0].position.x), this.getY(block.boundaryNodes[0].position.y));
+                for (let node of block.boundaryNodes) {
+                    this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+                }
+                this.context.closePath();
+
+                this.context.fillStyle = block.color;
+                this.context.fill();
+            }
+        }
 
         this.context.strokeStyle = "black";
         this.context.fillStyle = "black";
@@ -193,5 +215,20 @@ export class CanvasDrawingEngine implements IDrawingEngine {
     drawNode(node: StreetNode, color: string) {
         this.context.fillStyle = color;
         this.context.fillRect(this.getX(node.position.x) - 5, this.getY(node.position.y) - 5, 10, 10);
+    }
+
+    drawFace(face: Face, color: string) {
+        for (let edge of face.streets) {
+            this.drawEdge(edge, color);
+        }
+
+        for (let node of face.nodes) {
+            this.drawNode(node, color);
+        }
+
+        for (let a of face.nodes)
+            for (let edge of face.streets) {
+                this.drawEdge(edge, color);
+            }
     }
 }

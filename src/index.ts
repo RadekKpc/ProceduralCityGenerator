@@ -2,7 +2,7 @@ import { CanvasDrawingEngine } from "./drawingEngine/CanvasDrawingEngine";
 import { DrawingConfiguration } from "./drawingEngine/IDrawingEngine";
 import { CityGenerator } from "./generator/CityGenerator";
 import SimulationConfiguration from "./simulationConfiguration";
-import { StreetGraph } from "./types/StreetGraph";
+import { Hierarchy, Point, StreetGraph, StreetNode } from "./types/StreetGraph";
 
 const init = () => {
     const canvas = <HTMLCanvasElement>document.getElementById("canvas");
@@ -17,6 +17,7 @@ const init = () => {
     if (!ctx) return;
 
     const drawingConfiguration: DrawingConfiguration = {
+        fillBlocks: true,
         fillFaces: true,
         drawMajorNodes: true,
         drawMinorNodes: true,
@@ -26,16 +27,23 @@ const init = () => {
 
     const canvansDrawingEngine = new CanvasDrawingEngine(ctx, SimulationConfiguration, canvas.width, canvas.height, drawingConfiguration);
     const cityGenerator = new CityGenerator(SimulationConfiguration);
+    cityGenerator.streetGraph.setCanvansDrawingEngine(canvansDrawingEngine);
     canvansDrawingEngine.drawStreets(cityGenerator.streetGraph);
 
 
 
     // view configuration settings
     const fillFaces = (document.getElementById("fillFaces") as HTMLInputElement);
+    const fillBlocks = (document.getElementById("fillBlocks") as HTMLInputElement);
     const drawMajorNodes = (document.getElementById("drawMajorNodes") as HTMLInputElement);
     const drawMinorNodes = (document.getElementById("drawMinorNodes") as HTMLInputElement);
     const showNewNodes = (document.getElementById("showNewNodes") as HTMLInputElement);
     const showGrowthCenters = (document.getElementById("showGrowthCenters") as HTMLInputElement);
+
+    fillBlocks.onclick = () => {
+        canvansDrawingEngine.changeDrawingConiguration({ fillBlocks: fillBlocks.checked });
+        canvansDrawingEngine.redrawStreetGraph();
+    }
 
     fillFaces.onclick = () => {
         canvansDrawingEngine.changeDrawingConiguration({ fillFaces: fillFaces.checked });
@@ -102,9 +110,9 @@ const init = () => {
 
 
     // action buttons
-    const calcualteFaces = document.getElementById("calcualteFaces");
-    if (calcualteFaces) calcualteFaces.onclick = () => {
-        if (currentStreetGraph) currentStreetGraph.calcualteFaces();
+    const calculateFaces = document.getElementById("calculateFaces");
+    if (calculateFaces) calculateFaces.onclick = () => {
+        if (currentStreetGraph) cityGenerator.extractFacesFromGraph();
         canvansDrawingEngine.redrawStreetGraph();
     }
 
@@ -123,6 +131,18 @@ const init = () => {
     const expandMinorStreets = document.getElementById("expandMinorStreets");
     if (expandMinorStreets) expandMinorStreets.onclick = () => {
         if (currentStreetGraph) cityGenerator.expandMinorStreets();
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    const calculateBlocks = document.getElementById("calculateBlocks");
+    if (calculateBlocks) calculateBlocks.onclick = () => {
+        if (currentStreetGraph) cityGenerator.extractBlocksFromFace();
+        canvansDrawingEngine.redrawStreetGraph();
+    }
+
+    const calculateNextBlock = document.getElementById("calculateNextBlock");
+    if (calculateNextBlock) calculateNextBlock.onclick = () => {
+        if (currentStreetGraph) cityGenerator.extractBlocksFromNextFace();
         canvansDrawingEngine.redrawStreetGraph();
     }
 
@@ -148,6 +168,32 @@ const init = () => {
         } else {
             zoomOutCallback();
         }
+    });
+
+    // DOUBLE CLICK
+
+    canvas.addEventListener('dblclick', (e) => {
+        if (!currentStreetGraph) return;
+        const realPositionX = canvansDrawingEngine.pixelToPositionX(e.x - 8);
+        const realPositionY = canvansDrawingEngine.pixelToPositionY(e.y - 8);
+        const clickPointPosition = new Point(realPositionX, realPositionY);
+        const scanR = 50;
+
+        const nodes = currentStreetGraph.nodes.filter(n => n.position.distance(clickPointPosition) < scanR);
+
+        const face = currentStreetGraph.facesList.find((f) => f.traingles.some(t => f.isInTriangle(t, clickPointPosition)));
+        const block = currentStreetGraph.blocksList.find((f) => f.traingles.some(t => f.isInTriangle(t, clickPointPosition)));
+
+        if (face) {
+            canvansDrawingEngine.drawFace(face, 'purple');
+            console.log(face);
+        }
+
+        if (block) {
+            canvansDrawingEngine.drawFace(block, 'orange')
+            console.log(block);
+        }
+
     });
 
     // MOVING CANVAS POSITION AROUND
@@ -228,10 +274,67 @@ const init = () => {
 
     const findCycle = () => {
         const edgeId = (document.getElementById('edgeId2') as HTMLInputElement).value;
-        currentStreetGraph?.calcualteFace(edgeId);
+        currentStreetGraph?.calculateFace(edgeId);
     }
 
     cycleFindButton?.addEventListener("click", findCycle);
+
+    // face highlite
+
+    const printFaceInfo = document.getElementById('printFaceInfo');
+    const printFaceInfoCb = () => {
+        const faceId = (document.getElementById('face') as HTMLInputElement).value;
+        const face = currentStreetGraph?.facesDict[faceId];
+        if (face) {
+            canvansDrawingEngine.drawFace(face, 'blue')
+
+            console.log(face);
+        } else {
+            console.log(`edge ${faceId} do not exists`)
+        }
+
+    }
+
+    printFaceInfo?.addEventListener("click", printFaceInfoCb);
+
+    // run cycle
+    const runBlocksAlgo = document.getElementById('runBlocksAlgo');
+    const runBlocksAlgoCb = () => {
+        const faceId = (document.getElementById('face') as HTMLInputElement).value;
+        const delay = (document.getElementById('delay') as HTMLInputElement).value;
+        const face = currentStreetGraph?.facesDict[faceId];
+        if (face) {
+            currentStreetGraph?.extractBlockFromFace(face, Number(delay));
+            canvansDrawingEngine.redrawStreetGraph();
+            console.log(face);
+        } else {
+            console.log(`edge ${faceId} do not exists`)
+        }
+
+    }
+
+    runBlocksAlgo?.addEventListener("click", runBlocksAlgoCb);
+
+    // run block
+    const blockFoundEdge = document.getElementById('blockFoundEdge');
+    const blockFoundEdgeCb = () => {
+        const edgeId = (document.getElementById('edgeId2') as HTMLInputElement).value;
+        const delay = (document.getElementById('delay') as HTMLInputElement).value;
+        const faceId = (document.getElementById('face') as HTMLInputElement).value;
+        const face = currentStreetGraph?.facesDict[faceId];
+        const edge = currentStreetGraph?.edges[faceId];
+        if (edge && face) {
+            currentStreetGraph?.extractBlockFromFaceEdge(face, edge /*, Number(delay)*/);
+            canvansDrawingEngine.redrawStreetGraph();
+            console.log(edgeId);
+        } else {
+            console.log(`edge ${edgeId} do not exists or face ${face} ${edge}`)
+        }
+
+    }
+
+    blockFoundEdge?.addEventListener("click", blockFoundEdgeCb);
+
 
 }
 

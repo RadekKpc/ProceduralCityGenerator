@@ -186,11 +186,12 @@ abstract class PlanarGraph {
 export class Face {
     id: string;
 
-    boundaryNodes: StreetNode[];
-    boundaryStreets: StreetEdge[];
+    boundaryNodes: StreetNode[]; // sorted in traversal path order | only needed to draw it properly (do not need to reflect real order)
 
-    nodes: StreetNode[] = [];
+    nodes: StreetNode[] = []; // used for sampling only (do not need order but need to have every node)
     streets: StreetEdge[] = [];
+
+    blocks: Face[] = [];
 
     traingles: [StreetNode, StreetNode, StreetNode][] = [];
     trainglesSurface: number[] = [];
@@ -203,7 +204,6 @@ export class Face {
     constructor(boundaryNodes: StreetNode[], boundaryStreets: StreetEdge[]) {
         this.id = boundaryNodes.map(n => n.id).sort((id1, id2) => id1 - id2).join(':');
         this.boundaryNodes = boundaryNodes;
-        this.boundaryStreets = boundaryStreets;
         this.nodes = [...boundaryNodes];
         this.streets = [...boundaryStreets];
 
@@ -271,20 +271,99 @@ export class Face {
         return [p1, p2];
     }
 
+    _sign(p1: Point, p2: Point, p3: Point) {
+        return ((p1.x - p3.x) * (p2.y - p3.y)) - ((p2.x - p3.x) * (p1.y - p3.y));
+    }
+
+    isInTriangle(traingle: [StreetNode, StreetNode, StreetNode], p: Point) {
+        const [v1, v2, v3] = traingle.map(n => n.position);
+
+        let d1, d2, d3;
+        let has_neg, has_pos;
+
+        d1 = this._sign(p, v1, v2);
+        d2 = this._sign(p, v2, v3);
+        d3 = this._sign(p, v3, v1);
+
+        has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+        has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+        return !(has_neg && has_pos);
+
+    }
+
     addStreet(street: StreetEdge) {
+        // boundary street
+        // if (street.startNode.hierarchy == Hierarchy.Major && street.endNode.hierarchy == Hierarchy.Major) {
+        //     if (!this.boundaryStreets.some(s => s.id == street.id)) {
+        //         this.boundaryStreets.push(street);
+        //     };
+        // }
+
+        // we dnot need to add new node here (as it can be only from spliting and we still can fill polygon with old data)
+
+        // if (street.startNode.hierarchy == Hierarchy.Major) {
+        //     if (!this.boundaryNodes.some(n => n.id == street.startNode.id)) {
+        //         this.boundaryNodes.push(street.startNode); // put in proper place
+        //     };
+        // }
+        // if (street.endNode.hierarchy == Hierarchy.Major) {
+        //     if (!this.boundaryNodes.some(n => n.id == street.endNode.id)) {
+        //         this.boundaryNodes.push(street.endNode); // put in proper place
+        //     };
+        // }
+
         if (!this.streets.some(s => s.id == street.id)) {
             this.streets.push(street);
         };
-        if (!this.boundaryNodes.some(n => n.id == street.startNode.id)) {
+
+        if (!this.nodes.some(n => n.id == street.startNode.id)) {
             this.nodes.push(street.startNode);
         };
-        if (!this.boundaryNodes.some(n => n.id == street.endNode.id)) {
+
+        if (!this.nodes.some(n => n.id == street.endNode.id)) {
             this.nodes.push(street.endNode);
         };
 
     }
+
+    removeStreet(street: StreetEdge) {
+        const startNodeId = street.startNode.id;
+        const endNodeId = street.endNode.id;
+
+        const streetToRemoveIndex = this.streets.findIndex(s => s.id == street.id);
+        if (streetToRemoveIndex > -1) {
+            this.streets.splice(streetToRemoveIndex, 1);
+        }
+
+        const startNodeToRemove = this.nodes.findIndex(n => n.id == startNodeId);
+        if (startNodeToRemove > -1 && !this.streets.some(s => s.startNode.id == startNodeId || s.endNode.id == startNodeId)) {
+            this.nodes.splice(startNodeToRemove, 1);
+        }
+
+        const endNodeToRemove = this.nodes.findIndex(n => n.id == endNodeId);
+        if (endNodeToRemove > -1 && !this.streets.some(s => s.startNode.id == endNodeId || s.endNode.id == endNodeId)) {
+            this.nodes.splice(endNodeToRemove, 1);
+        }
+
+        // we dont need to remove here (as it can be only from spliting and we stil can fill polygon with old data)
+        // const startNodeToRemoveBoundary = this.boundaryNodes.findIndex(n => n.id == startNodeId);
+        // if (startNodeToRemove > -1) {
+        //     this.boundaryNodes.splice(startNodeToRemoveBoundary, 1);
+        // }
+
+        // const endNodeToRemoveBoundary = this.boundaryNodes.findIndex(n => n.id == endNodeId);
+        // if (endNodeToRemove > -1) {
+        //     this.boundaryNodes.splice(endNodeToRemoveBoundary, 1);
+        // }
+
+    }
+
 }
 
+class Block extends Face {
+
+}
 
 export class StreetGraph {
 
@@ -296,6 +375,9 @@ export class StreetGraph {
 
     facesDict: { [faceId: string]: Face };
     facesList: Face[];
+
+    blocksDict: { [blockId: string]: Face } = {};
+    blocksList: Face[] = [];
 
     newPoints: Point[];
     valence2edges: number;
@@ -376,6 +458,28 @@ export class StreetGraph {
         face.addStreet(street);
     }
 
+    replaceStreet(streetToReplace: StreetEdge, newStreets: [StreetEdge, StreetEdge, StreetEdge]) {
+
+        const realtedFaces = this.facesList.filter(f => f.streets.some(s => s.id == streetToReplace.id));
+
+        this.addStreet(newStreets[0]);
+        this.addStreet(newStreets[1]);
+        this.addStreet(newStreets[2]);
+        this._removeStreet(streetToReplace);
+
+        for (const f of realtedFaces) {
+            // third one can be only in one face, new street containes one new node and one existing, we check which face poses exists one
+            if (f.nodes.some((node) => newStreets[2].startNode.id == node.id) || f.nodes.some((node) => newStreets[2].endNode.id == node.id)) {
+                f.addStreet(newStreets[2]);
+            }
+
+            f.addStreet(newStreets[0]);
+            f.addStreet(newStreets[1]);
+            f.removeStreet(streetToReplace);
+        }
+    }
+
+
     updateCloskwiseEdgesOrder(nodeId: number) {
         this.clockwiseEdgesOrder[nodeId] = Object.values(this.graph[nodeId]).sort((street1: StreetEdge, street2: StreetEdge) => {
             const street1Angle = street1.startNode.id == nodeId ? street1.startNodeAngle : street1.endNodeAngle;
@@ -385,7 +489,7 @@ export class StreetGraph {
     }
 
     // add logic for updateCloskwiseorder
-    removeStreet(street: StreetEdge) {
+    _removeStreet(street: StreetEdge) {
         const startNodeId = street.startNode.id;
         const endNodeId = street.endNode.id;
 
@@ -435,8 +539,9 @@ export class StreetGraph {
     }
 
     // clockvice travesal describe algorithm in thesis
-    async calcualteFaces() {
+    calculateFaces() {
         this.facesList = [];
+        this.facesDict = {};
 
         for (let edge of this.getEdges()) {
 
@@ -525,7 +630,8 @@ export class StreetGraph {
         // }
     }
 
-    async calcualteFace(edgeId: string) {
+    // TMP
+    calculateFace(edgeId: string) {
 
         const edge = this.edges[edgeId];
         if (!edge) return;
@@ -540,7 +646,7 @@ export class StreetGraph {
 
         while (true) {
 
-            await this.wait(100);
+            // await this.wait(100);
             const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode);
             if (!nextEdgeId) break;
 
@@ -564,7 +670,7 @@ export class StreetGraph {
 
         while (true) {
 
-            await this.wait(100);
+            // await this.wait(100);
             const nextEdgeId = this.getCounterclockwiseMostNode(currEdge, nextNode);
             if (!nextEdgeId) break;
 
@@ -587,17 +693,182 @@ export class StreetGraph {
         }
     }
 
-    getClockwiseMostNode(edge: StreetEdge, currentNode: StreetNode) {
-        const nodeValence = this.clockwiseEdgesOrder[currentNode.id].length;
-        if (nodeValence == 1) return null;
-        const index = this.clockwiseEdgesOrder[currentNode.id].findIndex((id) => id == edge.id);
-        return this.clockwiseEdgesOrder[currentNode.id][index == nodeValence - 1 ? 0 : index + 1];
+    extractBlocksFromFaces() {
+        this.blocksList = [];
+        this.blocksDict = {};
+
+        for (let face of this.facesList) {
+            face.blocks = [];
+
+            for (let edge of face.streets) {
+
+                let nextNode = edge.endNode;
+                let currEdge = edge;
+
+                const path = [edge];
+                const pathNodes = [edge.startNode, edge.endNode];
+
+                // this.canvansDrawingEngine?.drawEdge(edge, "blue");
+
+                while (true) {
+
+                    // await this.wait(100);
+
+                    const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode, (edgeId: string) => face.streets.some(s => s.id == edgeId));
+                    if (!nextEdgeId) break;
+
+                    currEdge = this.edges[nextEdgeId];
+                    // const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+                    // this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+
+                    nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+
+                    if (nextNode.id != edge.startNode.id) {
+                        pathNodes.push(nextNode);
+                    }
+
+                    path.push(currEdge);
+                    // cycle found
+                    if (nextNode.id == edge.startNode.id) {
+                        if (path.every(s => s.hierarchy == Hierarchy.Major)) break; // do not include outside cycle
+                        const face = new Face(pathNodes, path);
+
+                        if (!this.blocksDict[face.id]) {
+                            this.blocksDict[face.id] = face;
+                            this.blocksList.push(face);
+                        }
+
+                        face.blocks.push(face);
+                        // this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+                        break;
+                    }
+                }
+
+            }
+        }
     }
 
-    getCounterclockwiseMostNode(edge: StreetEdge, currentNode: StreetNode) {
+    // TMP
+    extractBlockFromFace(i: number | Face, howfast = 1) {
+        let face: Face;
+        if (typeof i == "number") {
+            face = this.facesList[i % this.facesList.length];
+        } else {
+            face = i;
+        }
+
+        face.blocks = [];
+        this.blocksList = [];
+        this.blocksDict = {};
+
+        for (let edge of face.streets) {
+
+            let nextNode = edge.endNode;
+            let currEdge = edge;
+
+            const path = [edge];
+            const pathNodes = [edge.startNode, edge.endNode];
+
+            this.canvansDrawingEngine?.drawEdge(edge, "blue");
+
+            while (true) {
+
+                const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode, (edgeId: string) => face.streets.some(s => s.id == edgeId));
+
+                if (!nextEdgeId) break;
+
+                currEdge = this.edges[nextEdgeId];
+                const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+                this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+
+                nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+
+                if (nextNode.id != edge.startNode.id) {
+                    pathNodes.push(nextNode);
+                }
+
+                path.push(currEdge);
+
+                // cycle found
+                if (nextNode.id == edge.startNode.id) {
+                    const face = new Face(pathNodes, path);
+                    if (!this.blocksDict[face.id]) {
+                        this.blocksDict[face.id] = face;
+                        this.blocksList.push(face);
+                    }
+
+                    face.blocks.push(face);
+                    this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+                    break;
+                }
+            }
+        }
+
+    }
+
+    // TMP
+    extractBlockFromFaceEdge(face: Face, edge: StreetEdge) {
+
+        this.blocksList = [];
+        this.blocksDict = {};
+
+        let nextNode = edge.endNode;
+        let currEdge = edge;
+
+        const path = [edge];
+        const pathNodes = [edge.startNode, edge.endNode];
+
+
+        while (true) {
+
+            const nextEdgeId = this.getClockwiseMostNode(currEdge, nextNode, (edgeId: string) => face.streets.some(s => s.id == edgeId));
+
+            if (!nextEdgeId) break;
+
+            currEdge = this.edges[nextEdgeId];
+            const randomColor = Math.floor(Math.random() * 16777215).toString(16);
+            this.canvansDrawingEngine?.drawEdge(currEdge, "#" + randomColor);
+
+            nextNode = currEdge.startNode.id == nextNode.id ? currEdge.endNode : currEdge.startNode;
+
+            if (nextNode.id != edge.startNode.id) {
+                pathNodes.push(nextNode);
+            }
+
+            path.push(currEdge);
+            // cycle found
+            if (nextNode.id == edge.startNode.id) {
+                const face = new Face(pathNodes, path);
+                if (!this.blocksDict[face.id]) {
+                    this.blocksDict[face.id] = face;
+                    this.blocksList.push(face);
+                }
+
+                face.blocks.push(face);
+                this.canvansDrawingEngine?.fillCircle(pathNodes, 'orange');
+                break;
+            }
+        }
+    }
+
+    getClockwiseMostNode(edge: StreetEdge, currentNode: StreetNode, filter: (edgeId: string) => boolean = () => true) {
         const nodeValence = this.clockwiseEdgesOrder[currentNode.id].length;
         if (nodeValence == 1) return null;
-        const index = this.clockwiseEdgesOrder[currentNode.id].findIndex((id) => id == edge.id);
-        return this.clockwiseEdgesOrder[currentNode.id][index == 0 ? nodeValence - 1 : index - 1];
+
+        const filteredClockwiseOrder = this.clockwiseEdgesOrder[currentNode.id].filter(filter);
+        if (filteredClockwiseOrder.length == 1) return null;
+
+        const index = filteredClockwiseOrder.findIndex((id) => id == edge.id);
+        return filteredClockwiseOrder[(index + 1) % filteredClockwiseOrder.length];
+    }
+
+    getCounterclockwiseMostNode(edge: StreetEdge, currentNode: StreetNode, filter: (edgeId: string) => boolean = () => true) {
+        const nodeValence = this.clockwiseEdgesOrder[currentNode.id].length;
+        if (nodeValence == 1) return null;
+
+        const filteredClockwiseOrder = this.clockwiseEdgesOrder[currentNode.id].filter(filter);
+        if (filteredClockwiseOrder.length == 1) return null;
+        const index = filteredClockwiseOrder.findIndex((id) => id == edge.id);
+        return this.clockwiseEdgesOrder[currentNode.id][index == 0 ? filteredClockwiseOrder.length - 1 : index - 1];
     }
 }

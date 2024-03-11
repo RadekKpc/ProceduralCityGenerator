@@ -1,6 +1,6 @@
-import { ISimulationConfiguration } from "../../simulationConfiguration";
+import { IExpansionConfiguraiton } from "../../simulationConfiguration";
 import { Point, StreetNode } from "../../types/StreetGraph";
 
 export interface IStreetsPattern {
-    getNewNodeLocation(direction: Point, startNode: StreetNode, configuration: ISimulationConfiguration): [Point, Point];
+    getNewNodeLocation(direction: Point, startNode: StreetNode, configuration: IExpansionConfiguraiton): [Point, Point];
 }
