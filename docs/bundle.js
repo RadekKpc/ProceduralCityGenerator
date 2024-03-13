@@ -162,6 +162,19 @@ class CanvasDrawingEngine {
         this.context.fillStyle = color;
         this.context.fillRect(this.getX(node.position.x) - 5, this.getY(node.position.y) - 5, 10, 10);
     }
+    drawPint(position, color) {
+        this.context.fillStyle = color;
+        this.context.fillRect(this.getX(position.x) - 2.5, this.getY(position.y) - 2.5, 5, 5);
+        this.context.lineWidth = 1;
+        this.context.beginPath();
+        this.context.moveTo(this.getX(-100), this.getY(0));
+        this.context.lineTo(this.getX(100), this.getY(0));
+        this.context.stroke();
+        this.context.beginPath();
+        this.context.moveTo(this.getX(0), this.getY(-100));
+        this.context.lineTo(this.getX(0), this.getY(100));
+        this.context.stroke();
+    }
     drawFace(face, color) {
         for (let edge of face.streets) {
             this.drawEdge(edge, color);
@@ -684,16 +697,27 @@ const init = () => {
                 cityGenerator.extractBlocksFromNextFace();
             canvansDrawingEngine.redrawStreetGraph();
         };
+    const drawPointsCb = () => {
+        const points = document.getElementById('points').value;
+        console.log(points);
+        for (const p of points.split('\n')) {
+            const [a, b, c] = p.split(' ');
+            console.log(Number(b), Number(c));
+            canvansDrawingEngine.drawPint(new StreetGraph_1.Point(Number(b), Number(c)), p.includes('true') ? 'green' : 'red');
+        }
+    };
     // ZOOMING
     const zoomInCallback = () => {
         SCALE *= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.redrawStreetGraph();
+        drawPointsCb();
     };
     const zoomOutCallback = () => {
         SCALE /= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.redrawStreetGraph();
+        drawPointsCb();
     };
     canvas.addEventListener('wheel', (e) => {
         if (e.deltaY > 0) {
@@ -837,6 +861,8 @@ const init = () => {
         }
     };
     blockFoundEdge === null || blockFoundEdge === void 0 ? void 0 : blockFoundEdge.addEventListener("click", blockFoundEdgeCb);
+    const drawPoints = document.getElementById('refresh');
+    drawPoints === null || drawPoints === void 0 ? void 0 : drawPoints.addEventListener("click", drawPointsCb);
 };
 init();
 
@@ -864,7 +890,7 @@ const street8 = new StreetGraph_1.StreetEdge(StreetNode3, StreetNode8, StreetGra
 const StreetNode9 = new StreetGraph_1.StreetNode(9, new StreetGraph_1.Point(120, 100), StreetGraph_1.Hierarchy.Major);
 const street9 = new StreetGraph_1.StreetEdge(StreetNode6, StreetNode9, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
 const street10 = new StreetGraph_1.StreetEdge(StreetNode8, StreetNode9, StreetGraph_1.Hierarchy.Major, 3, StreetGraph_1.StreetStatus.Build);
-initialStreetGraph.addStreet(street1);
+// initialStreetGraph.addStreet(street1);
 // initialStreetGraph.addStreet(street2);
 // initialStreetGraph.addStreet(street3);
 // initialStreetGraph.addStreet(street4);
