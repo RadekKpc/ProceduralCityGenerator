@@ -65,7 +65,7 @@ const street9 = new StreetEdge(StreetNode6, StreetNode9, Hierarchy.Major, 3, Str
 const street10 = new StreetEdge(StreetNode8, StreetNode9, Hierarchy.Major, 3, StreetStatus.Build);
 
 
-initialStreetGraph.addStreet(street1);
+// initialStreetGraph.addStreet(street1);
 // initialStreetGraph.addStreet(street2);
 // initialStreetGraph.addStreet(street3);
 // initialStreetGraph.addStreet(street4);

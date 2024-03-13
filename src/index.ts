@@ -146,6 +146,16 @@ const init = () => {
         canvansDrawingEngine.redrawStreetGraph();
     }
 
+    const drawPointsCb = () => {
+        const points = (document.getElementById('points') as HTMLInputElement).value;
+
+        for (const p of points.split('\n')) {
+            const [a, b, c] = p.split(' ')
+            canvansDrawingEngine.drawPint(new Point(Number(b), Number(c)), p.includes('true') ? 'green' : 'red');
+        }
+
+    }
+
 
     // ZOOMING
 
@@ -153,12 +163,14 @@ const init = () => {
         SCALE *= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.redrawStreetGraph();
+        drawPointsCb();
     }
 
     const zoomOutCallback = () => {
         SCALE /= 1.5;
         canvansDrawingEngine.setScale(SCALE);
         canvansDrawingEngine.redrawStreetGraph();
+        drawPointsCb();
     }
 
 
@@ -335,6 +347,11 @@ const init = () => {
 
     blockFoundEdge?.addEventListener("click", blockFoundEdgeCb);
 
+
+    const drawPoints = document.getElementById('refresh');
+
+
+    drawPoints?.addEventListener("click", drawPointsCb);
 
 }
 

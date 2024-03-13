@@ -1,5 +1,5 @@
 import { ISimulationConfiguration } from "../simulationConfiguration";
-import { Face, Hierarchy, StreetEdge, StreetGraph, StreetNode } from "../types/StreetGraph";
+import { Face, Hierarchy, Point, StreetEdge, StreetGraph, StreetNode } from "../types/StreetGraph";
 import { DrawingConfiguration, IDrawingEngine } from "./IDrawingEngine";
 
 export class CanvasDrawingEngine implements IDrawingEngine {
@@ -215,6 +215,21 @@ export class CanvasDrawingEngine implements IDrawingEngine {
     drawNode(node: StreetNode, color: string) {
         this.context.fillStyle = color;
         this.context.fillRect(this.getX(node.position.x) - 5, this.getY(node.position.y) - 5, 10, 10);
+    }
+
+    drawPint(position: Point, color: string) {
+        this.context.fillStyle = color;
+        this.context.fillRect(this.getX(position.x)-2.5, this.getY(position.y) -2.5, 5, 5);
+        this.context.lineWidth= 1;
+        this.context.beginPath();
+        this.context.moveTo(this.getX(-100), this.getY(0));
+        this.context.lineTo(this.getX(100), this.getY(0));
+        this.context.stroke();
+
+        this.context.beginPath();
+        this.context.moveTo(this.getX(0), this.getY(-100));
+        this.context.lineTo(this.getX(0), this.getY(100));
+        this.context.stroke();
     }
 
     drawFace(face: Face, color: string) {
