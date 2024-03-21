@@ -1,4 +1,4 @@
-import { Point } from "../types/StreetGraph";
+import { Point } from "../types/BaseTypes";
 
 // Standard Normal variate using Box-Muller transform.
 export const gaussianRandom = (stdev = 1, mean = 0, min = -5, max = 5): number => {
@@ -57,3 +57,16 @@ export const randomlySelectElementFromProbabilityDistribution = (distribution: n
     const randomNumber = Math.random();
     return distribution.findIndex(e => e >= randomNumber);
 }
+
+class NextNodeIdGeneratorC {
+
+    nextNodeId: number = 100;
+
+    next() {
+        return this.nextNodeId++;
+    }
+}
+
+export const NextNodeIdGenerator = new NextNodeIdGeneratorC()
+
+

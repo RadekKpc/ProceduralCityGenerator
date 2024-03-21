@@ -1,4 +1,7 @@
-import { Hierarchy, Point, StreetEdge, StreetGraph, StreetNode, StreetStatus } from "./types/StreetGraph";
+import { Hierarchy, Point, StreetStatus } from "./types/BaseTypes";
+import { StreetEdge } from "./types/StreetEdge";
+import { StreetGraph } from "./types/StreetGraph";
+import { StreetNode } from "./types/StreetNode";
 
 export interface IExpansionConfiguraiton {
     minSteetSegmentLength: number,
@@ -28,7 +31,7 @@ export interface ISimulationConfiguration {
     minorNodesGeneration: IExpansionConfiguraiton,
 
     // lots subdivision
-    maximuLotSurface: number
+    maxLotSurface: number
 
 }
 
@@ -65,7 +68,7 @@ const street9 = new StreetEdge(StreetNode6, StreetNode9, Hierarchy.Major, 3, Str
 const street10 = new StreetEdge(StreetNode8, StreetNode9, Hierarchy.Major, 3, StreetStatus.Build);
 
 
-// initialStreetGraph.addStreet(street1);
+initialStreetGraph.addStreet(street1);
 // initialStreetGraph.addStreet(street2);
 // initialStreetGraph.addStreet(street3);
 // initialStreetGraph.addStreet(street4);
@@ -109,7 +112,7 @@ const SimulationConfiguration: ISimulationConfiguration = {
     },
 
     // lots subdivision
-    maximuLotSurface: 400
+    maxLotSurface: 50
 }
 
 export default SimulationConfiguration; 

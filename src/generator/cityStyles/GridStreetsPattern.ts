@@ -1,5 +1,6 @@
 import { IExpansionConfiguraiton } from "../../simulationConfiguration";
-import { Point, StreetNode } from "../../types/StreetGraph";
+import { Point } from "../../types/BaseTypes";
+import { StreetNode } from "../../types/StreetNode";
 import { IStreetsPattern } from "./IStreetsPattern";
 
 export class GridStreetsPattern implements IStreetsPattern {

@@ -1,11 +1,12 @@
 import { StreetGraph } from "../types/StreetGraph";
 
 export type DrawingConfiguration = {
+    fillLots: boolean;
     fillFaces: boolean;
     fillBlocks: boolean;
     drawMajorNodes: boolean;
     drawMinorNodes: boolean;
-    drawNewPoints: boolean;
+    showLotNodes: boolean;
     drawGrowthCenters: boolean;
 }
 export interface IDrawingEngine {

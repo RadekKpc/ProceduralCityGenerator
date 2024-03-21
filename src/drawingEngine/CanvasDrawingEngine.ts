@@ -1,5 +1,9 @@
 import { ISimulationConfiguration } from "../simulationConfiguration";
-import { Face, Hierarchy, Point, StreetEdge, StreetGraph, StreetNode } from "../types/StreetGraph";
+import { Hierarchy, Point } from "../types/BaseTypes";
+import { Face } from "../types/Face";
+import { StreetEdge } from "../types/StreetEdge";
+import { StreetGraph } from "../types/StreetGraph";
+import { StreetNode } from "../types/StreetNode";
 import { DrawingConfiguration, IDrawingEngine } from "./IDrawingEngine";
 
 export class CanvasDrawingEngine implements IDrawingEngine {
@@ -19,7 +23,8 @@ export class CanvasDrawingEngine implements IDrawingEngine {
     streetGraph: StreetGraph | null;
     pointsSizes: number;
 
-    constructor(context: CanvasRenderingContext2D, simulationCofiguration: ISimulationConfiguration, width: number, height: number, drawingConfiguration: DrawingConfiguration) {
+    constructor(context: CanvasRenderingContext2D | null, simulationCofiguration: ISimulationConfiguration, width: number, height: number, drawingConfiguration: DrawingConfiguration) {
+        if (!context) throw new Error('canavs is empty');
         this.context = context;
         this.offsetX = width / 2;
         this.offsetY = height / 2;
@@ -93,7 +98,7 @@ export class CanvasDrawingEngine implements IDrawingEngine {
         this.streetGraph = streetGraph;
 
         if (this.drawingConfiguration.fillFaces) {
-            for (let face of streetGraph.facesList) {
+            for (let face of Object.values(streetGraph.facesDict)) {
 
                 this.context.beginPath();
                 this.context.moveTo(this.getX(face.boundaryNodes[0].position.x), this.getY(face.boundaryNodes[0].position.y));
@@ -108,7 +113,7 @@ export class CanvasDrawingEngine implements IDrawingEngine {
         }
 
         if (this.drawingConfiguration.fillBlocks) {
-            for (let block of streetGraph.blocksList) {
+            for (let block of Object.values(streetGraph.blocksDict)) {
 
                 this.context.beginPath();
                 this.context.moveTo(this.getX(block.boundaryNodes[0].position.x), this.getY(block.boundaryNodes[0].position.y));
@@ -119,18 +124,52 @@ export class CanvasDrawingEngine implements IDrawingEngine {
 
                 this.context.fillStyle = block.color;
                 this.context.fill();
+
+            }
+        }
+
+        if (this.drawingConfiguration.fillLots) {
+            for (let block of Object.values(streetGraph.blocksDict)) {
+
+                for (let lot of Object.values(block.subfacesDict)) {
+
+                    this.context.beginPath();
+                    this.context.moveTo(this.getX(lot.boundaryNodes[0].position.x), this.getY(lot.boundaryNodes[0].position.y));
+                    for (let node of lot.boundaryNodes) {
+                        this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+                    }
+                    this.context.closePath();
+
+                    this.context.fillStyle = lot.color;
+                    this.context.fill();
+
+                }
             }
         }
 
         this.context.strokeStyle = "black";
         this.context.fillStyle = "black";
 
-        for (let edge of streetGraph.getEdges()) {
+        for (let edge of Object.values(streetGraph.edges)) {
             this.context.lineWidth = edge.width;
             this.context.beginPath();
             this.context.moveTo(this.getX(edge.startNode.position.x), this.getY(edge.startNode.position.y));
             this.context.lineTo(this.getX(edge.endNode.position.x), this.getY(edge.endNode.position.y));
             this.context.stroke();
+        }
+
+        for (let block of Object.values(streetGraph.blocksDict)) {
+
+
+            this.context.fillStyle = "black";
+            for (let edge of Object.values(block.streets).filter(n => n.hierarchy == Hierarchy.Lot)) {
+                this.context.lineWidth = edge.width;
+                this.context.beginPath();
+                this.context.moveTo(this.getX(edge.startNode.position.x), this.getY(edge.startNode.position.y));
+                this.context.lineTo(this.getX(edge.endNode.position.x), this.getY(edge.endNode.position.y));
+                this.context.stroke();
+            }
+
         }
 
         if (this.drawingConfiguration.drawGrowthCenters) {
@@ -155,39 +194,24 @@ export class CanvasDrawingEngine implements IDrawingEngine {
             for (let point of streetGraph.nodes.filter(n => n.hierarchy == Hierarchy.Minor)) {
                 this.context.fillRect(this.getX(point.position.x) - (this.pointsSizes / 2), this.getY(point.position.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
             }
-        }
 
-        if (this.drawingConfiguration.drawNewPoints) {
             this.context.fillStyle = "green";
-
-            for (let newPoint of streetGraph.newPoints) {
-                this.context.fillRect(this.getX(newPoint.x) - (this.pointsSizes / 2), this.getY(newPoint.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+            for (let point of streetGraph.nodes.filter(n => n.hierarchy == Hierarchy.Lot)) {
+                this.context.fillRect(this.getX(point.position.x) - (this.pointsSizes / 2), this.getY(point.position.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
             }
         }
 
 
-        // trainglesToDraw
-        for (const traingle of streetGraph.trainglesToDraw) {
+        if (this.drawingConfiguration.showLotNodes) {
+            for (let block of Object.values(streetGraph.blocksDict)) {
 
-            this.context.beginPath();
-            this.context.moveTo(this.getX(traingle[0].position.x), this.getY(traingle[0].position.y));
-            for (let node of traingle) {
-                this.context.lineTo(this.getX(node.position.x), this.getY(node.position.y));
+                this.context.fillStyle = "green";
+                for (let point of Object.values(block.nodes).filter(n => n.hierarchy == Hierarchy.Lot)) {
+                    this.context.fillRect(this.getX(point.position.x) - (this.pointsSizes / 2), this.getY(point.position.y) - (this.pointsSizes / 2), this.pointsSizes, this.pointsSizes);
+                }
             }
-            this.context.closePath();
-
-            const randomColor = Math.floor(Math.random() * 128 + 128).toString(16);
-            this.context.fillStyle = "#0000" + randomColor;
-            this.context.fill();
         }
 
-        // point to draw
-
-        for (let ponint of streetGraph.pointsToDraw) {
-            const randomColor = Math.floor(Math.random() * 128 + 128).toString(16);
-            this.context.fillStyle = "#" + randomColor + '0000';
-            this.context.fillRect(this.getX(ponint.x), this.getY(ponint.y), 5, 5);
-        }
     }
 
     fillCircle(path: StreetNode[], color: string) {
@@ -219,8 +243,8 @@ export class CanvasDrawingEngine implements IDrawingEngine {
 
     drawPint(position: Point, color: string) {
         this.context.fillStyle = color;
-        this.context.fillRect(this.getX(position.x)-2.5, this.getY(position.y) -2.5, 5, 5);
-        this.context.lineWidth= 1;
+        this.context.fillRect(this.getX(position.x) - 2.5, this.getY(position.y) - 2.5, 5, 5);
+        this.context.lineWidth = 1;
         this.context.beginPath();
         this.context.moveTo(this.getX(-100), this.getY(0));
         this.context.lineTo(this.getX(100), this.getY(0));
@@ -233,16 +257,16 @@ export class CanvasDrawingEngine implements IDrawingEngine {
     }
 
     drawFace(face: Face, color: string) {
-        for (let edge of face.streets) {
+        for (let edge of Object.values(face.streets)) {
             this.drawEdge(edge, color);
         }
 
-        for (let node of face.nodes) {
+        for (let node of Object.values(face.nodes)) {
             this.drawNode(node, color);
         }
 
-        for (let a of face.nodes)
-            for (let edge of face.streets) {
+        for (let a of Object.values(face.nodes))
+            for (let edge of Object.values(face.streets)) {
                 this.drawEdge(edge, color);
             }
     }
